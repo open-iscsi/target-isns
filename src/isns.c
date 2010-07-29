@@ -747,6 +747,7 @@ int isns_handle(bool is_timeout, int *timeout __attribute__ ((unused)))
 		break;
 	case ISNS_FUNC_DEV_DEREG_RSP:
 	case ISNS_FUNC_SCN_REG_RSP:
+	case ISNS_FUNC_SCN_DEREG_RSP:
 		break;
 	case ISNS_FUNC_SCN:
 		name = print_scn_pdu(hdr);
