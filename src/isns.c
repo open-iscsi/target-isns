@@ -78,9 +78,9 @@ static int isns_get_ip(int fd)
 	}
 
 	err = getnameinfo(&l.s, sizeof(l.s),
-			  eid, sizeof(eid), NULL, 0, 0);
+			  eid, sizeof(eid), NULL, 0, NI_NUMERICHOST);
 	if (err) {
-		log_print(LOG_ERR, "getaddrinfo error %s!", gai_strerror(err));
+		log_print(LOG_ERR, "getnameinfo error %s!", gai_strerror(err));
 		return err;
 	}
 
