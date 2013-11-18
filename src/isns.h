@@ -30,4 +30,8 @@ int isns_init(char *addr);
 
 void isns_exit(void);
 
+void isns_target_register(char *name);
+
+void isns_target_deregister(char *name);
+
 #endif

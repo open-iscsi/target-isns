@@ -37,11 +37,7 @@
 
 #define ISCSI_NAME_LEN	256
 
-void isns_set_fd(int isns __attribute__ ((unused)),
-		 int scn_listen __attribute__ ((unused)),
-		 int scn __attribute__ ((unused)))
-{
-}
+extern void isns_set_fd(int isns, int scn_listen, int scn);
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 #define BUFSIZE (1 << 18)
@@ -260,9 +256,14 @@ static int isns_scn_register(void)
 
 	return 0;
 }
+#else
+static int isns_scn_register(void)
+{
+	return 0;
+}
 #endif
 
-#if ISCSITARGET
+#ifdef ISCSITARGET
 static int isns_attr_query(char *name)
 {
 	int err;
@@ -370,18 +371,17 @@ static int isns_deregister(void)
 }
 #endif
 
-#ifdef ISCSITARGET
 int isns_target_register(char *name)
 {
 	char buf[4096];
 	uint16_t flags = 0, length = 0;
 	struct isns_hdr *hdr = (struct isns_hdr *) buf;
 	struct isns_tlv *tlv;
-	uint32_t port = htonl(server_port);
+	uint32_t port = 3260; /* FIXME: */
 	uint32_t node = htonl(ISNS_NODE_TARGET);
 	uint32_t type = htonl(2);
-	struct target *target;
-	int err, initial = list_length_is_one(&targets_list);
+	int err;
+	int initial = 1; /* was list_length_is_one(&targets_list); */
 
 	if (!isns_fd)
 		if (isns_connect() < 0)
@@ -390,9 +390,8 @@ int isns_target_register(char *name)
 	memset(buf, 0, sizeof(buf));
 	tlv = (struct isns_tlv *) hdr->pdu;
 
-        target = list_entry(targets_list.q_back, struct target, tlist);
         length += isns_tlv_set(&tlv, ISNS_ATTR_ISCSI_NAME,
-			       strlen(target->name) + 1, target->name);
+			       strlen(name) + 1, name);
 
 	length += isns_tlv_set(&tlv, ISNS_ATTR_ENTITY_IDENTIFIER,
 			       strlen(eid) + 1, eid);
@@ -436,34 +435,15 @@ int isns_target_register(char *name)
 
 	return 0;
 }
-#endif
 
-#ifdef ISCSITARGET
-static void free_all_acl(struct target *target)
-{
-	struct isns_initiator *ini;
-
-	while (!list_empty(&target->isns_head)) {
-		ini = list_entry(target->isns_head.q_forw, typeof(*ini), ilist);
-		remque(&ini->ilist);
-		free(ini);
-	}
-}
-#endif
-
-#ifdef ISCSITARGET
 int isns_target_deregister(char *name)
 {
 	char buf[4096];
 	uint16_t flags, length = 0;
 	struct isns_hdr *hdr = (struct isns_hdr *) buf;
 	struct isns_tlv *tlv;
-	int err, last = list_empty(&targets_list);
-	struct target *target;
-
-	target = target_find_by_name(name);
-	if (target)
-		free_all_acl(target);
+	int err;
+	int last = 1; /* was list_empty(&targets_list); */
 
 	if (!isns_fd)
 		if (isns_connect() < 0)
@@ -494,7 +474,6 @@ int isns_target_deregister(char *name)
 
 	return 0;
 }
-#endif
 
 static int recv_hdr(int fd, struct isns_io *rx, struct isns_hdr *hdr)
 {
