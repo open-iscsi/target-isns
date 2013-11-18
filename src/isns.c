@@ -55,6 +55,7 @@ static uint32_t current_timeout = 30; /* seconds */
 static char eid[ISCSI_NAME_LEN];
 static uint8_t ip[16]; /* IET supports only one portal */
 static struct sockaddr_storage ss;
+static char source_attribute[ISCSI_NAME_LEN] = "";
 
 static int isns_get_ip(int fd)
 {
@@ -357,23 +358,25 @@ int isns_target_register(char *name)
 	uint32_t node = htonl(ISNS_NODE_TARGET);
 	uint32_t type = htonl(2);
 	int err;
-	bool first;
-	struct target *target;
+	bool first_registration = source_attribute[0] == '\0';
 
 	if (!isns_fd)
 		if (isns_connect() < 0)
 			return 0;
 
-	target = list_top(&targets, struct target, list);
-	first = streq(target->name, name);
+	if (first_registration) {
+		strncpy(source_attribute, name, ISCSI_NAME_LEN);
+		source_attribute[ISCSI_NAME_LEN - 1] = '\0';
+	}
 
-	log_print(LOG_DEBUG, "registering target %s %s", name, first ? "(first)" : "");
+	log_print(LOG_DEBUG, "registering target %s %s", name,
+		  first_registration ? "(first)" : "");
 
 	memset(buf, 0, sizeof(buf));
 	tlv = (struct isns_tlv *) hdr->pdu;
 
         length += isns_tlv_set(&tlv, ISNS_ATTR_ISCSI_NAME,
-			       strlen(name) + 1, name);
+			       strlen(source_attribute) + 1, source_attribute);
 
 	length += isns_tlv_set(&tlv, ISNS_ATTR_ENTITY_IDENTIFIER,
 			       strlen(eid) + 1, eid);
@@ -381,7 +384,7 @@ int isns_target_register(char *name)
 	length += isns_tlv_set(&tlv, 0, 0, 0);
 	length += isns_tlv_set(&tlv, ISNS_ATTR_ENTITY_IDENTIFIER,
 			       strlen(eid) + 1, eid);
-	if (first) {
+	if (first_registration) {
 		length += isns_tlv_set(&tlv, ISNS_ATTR_ENTITY_PROTOCOL,
 				       sizeof(type), &type);
 		length += isns_tlv_set(&tlv, ISNS_ATTR_PORTAL_IP_ADDRESS,
