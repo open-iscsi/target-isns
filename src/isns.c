@@ -52,7 +52,7 @@ struct isns_io {
 };
 
 static uint16_t scn_listen_port;
-static int use_isns, use_isns_ac, isns_fd, scn_listen_fd, scn_fd;
+static int isns_fd, scn_listen_fd, scn_fd;
 static struct isns_io isns_rx, scn_rx;
 static char *rxbuf;
 static uint16_t transaction;
@@ -60,26 +60,6 @@ static uint32_t current_timeout = 30; /* seconds */
 static char eid[ISCSI_NAME_LEN];
 static uint8_t ip[16]; /* IET supports only one portal */
 static struct sockaddr_storage ss;
-
-#ifdef ISCSITARGET
-int isns_scn_allow(uint32_t tid, char *name)
-{
-	struct isns_initiator *ini;
-	struct target *target = target_find_by_id(tid);
-
-	if (!use_isns || !use_isns_ac)
-		return 1;
-
-	if (!target)
-		return 0;
-
-	list_for_each_entry(ini, &target->isns_head, ilist) {
-		if (!strcmp(ini->name, name))
-			return 1;
-	}
-	return 0;
-}
-#endif
 
 static int isns_get_ip(int fd)
 {
@@ -403,9 +383,6 @@ int isns_target_register(char *name)
 	struct target *target;
 	int err, initial = list_length_is_one(&targets_list);
 
-	if (!use_isns)
-		return 0;
-
 	if (!isns_fd)
 		if (isns_connect() < 0)
 			return 0;
@@ -487,9 +464,6 @@ int isns_target_deregister(char *name)
 	target = target_find_by_name(name);
 	if (target)
 		free_all_acl(target);
-
-	if (!use_isns)
-		return 0;
 
 	if (!isns_fd)
 		if (isns_connect() < 0)
@@ -976,7 +950,7 @@ out:
 	return err;
 }
 
-int isns_init(char *addr, int isns_ac)
+int isns_init(char *addr)
 {
 	int err;
 	char port[8];
@@ -1006,9 +980,6 @@ int isns_init(char *addr, int isns_ac)
 	scn_rx.buf = rxbuf + BUFSIZE;
 	scn_rx.offset = 0;
 
-	use_isns = 1;
-	use_isns_ac = isns_ac;
-
 	return current_timeout * 1000;
 }
 
@@ -1017,9 +988,6 @@ void isns_exit(void)
 #ifdef ISCSITARGET
 	struct target *target;
 #endif
-
-	if (!use_isns)
-		return;
 
 	isns_scn_deregister("foo");
 
