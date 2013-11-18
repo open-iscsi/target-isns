@@ -1,4 +1,10 @@
-/* Licensed under BSD-MIT - see LICENSE file for details */
+/*
+ * (C) Copyright 2009-2013
+ * Rusty Russell <rusty@rustcorp.com.au>
+ *
+ * SPDX-License-Identifier:	MIT
+ */
+
 #include <ccan/daemonize/daemonize.h>
 #include <unistd.h>
 #include <stdlib.h>

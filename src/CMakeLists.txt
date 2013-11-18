@@ -1,3 +1,10 @@
+#
+# (C) Copyright 2013
+# Christophe Vu-Brugier <cvubrugier@yahoo.fr>
+#
+# SPDX-License-Identifier:	GPL-2.0+
+#
+
 include_directories(".")
 
 add_library(ccan STATIC

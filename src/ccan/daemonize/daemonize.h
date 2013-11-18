@@ -1,4 +1,10 @@
-/* Licensed under BSD-MIT - see LICENSE file for details */
+/*
+ * (C) Copyright 2009-2013
+ * Rusty Russell <rusty@rustcorp.com.au>
+ *
+ * SPDX-License-Identifier:	MIT
+ */
+
 #ifndef CCAN_DAEMONIZE_H
 #define CCAN_DAEMONIZE_H
 #include <stdbool.h>

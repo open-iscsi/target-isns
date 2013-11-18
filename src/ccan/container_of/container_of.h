@@ -1,4 +1,10 @@
-/* CC0 (Public domain) - see LICENSE file for details */
+/*
+ * (C) Copyright 2007-2013
+ * Rusty Russell <rusty@rustcorp.com.au>
+ *
+ * SPDX-License-Identifier:	CC0-1.0
+ */
+
 #ifndef CCAN_CONTAINER_OF_H
 #define CCAN_CONTAINER_OF_H
 #include <stddef.h>

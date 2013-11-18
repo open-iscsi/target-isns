@@ -1,4 +1,10 @@
-/* Licensed under BSD-MIT - see LICENSE file for details */
+/*
+ * (C) Copyright 2007-2013
+ * Rusty Russell <rusty@rustcorp.com.au>
+ *
+ * SPDX-License-Identifier:	MIT
+ */
+
 #ifndef CCAN_LIST_H
 #define CCAN_LIST_H
 #include <stdbool.h>
