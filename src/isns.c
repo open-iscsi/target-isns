@@ -750,7 +750,7 @@ static void qry_rsp_handle(struct isns_hdr *hdr)
 }
 #endif
 
-int isns_handle(int is_timeout, int *timeout __attribute__ ((unused)))
+int isns_handle(bool is_timeout, int *timeout __attribute__ ((unused)))
 {
 	int err;
 	struct isns_io *rx = &isns_rx;
@@ -849,7 +849,7 @@ static void send_scn_rsp(char *name, uint16_t transaction)
 		log_print(LOG_ERR, "%s %d: %s", __func__, __LINE__, strerror(errno));
 }
 
-int isns_scn_handle(int is_accept)
+int isns_scn_handle(bool is_accept)
 {
 	int err;
 	struct isns_io *rx = &scn_rx;
