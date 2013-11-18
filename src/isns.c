@@ -2,6 +2,7 @@
  * iSNS functions
  *
  * Copyright (C) 2006 FUJITA Tomonori <tomof@acm.org>
+ * Copyright (C) 2013 Christophe Vu-Brugier <cvubrugier@yahoo.fr>
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License as
@@ -19,6 +20,7 @@
  * 02110-1301 USA
  */
 
+#define _POSIX_SOURCE
 #include <errno.h>
 #include <netdb.h>
 #include <stdio.h>
@@ -30,29 +32,26 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 
-#include "iscsid.h"
 #include "isns_proto.h"
+
+#define ISCSI_NAME_LEN	256
+#define log_error printf
+#define log_debug(i, args...) printf(args)
+
+void isns_set_fd(int isns __attribute__ ((unused)),
+		 int scn_listen __attribute__ ((unused)),
+		 int scn __attribute__ ((unused)))
+{
+}
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 #define BUFSIZE (1 << 18)
 
 struct isns_io {
 	char *buf;
-	int offset;
+	size_t offset;
 };
 
-struct isns_qry_mgmt {
-	char name[ISCSI_NAME_LEN];
-	uint16_t transaction;
-	struct __qelem qlist;
-};
-
-struct isns_initiator {
-	char name[ISCSI_NAME_LEN];
-	struct __qelem ilist;
-};
-
-static LIST_HEAD(qry_list);
 static uint16_t scn_listen_port;
 static int use_isns, use_isns_ac, isns_fd, scn_listen_fd, scn_fd;
 static struct isns_io isns_rx, scn_rx;
@@ -63,6 +62,7 @@ static char eid[ISCSI_NAME_LEN];
 static uint8_t ip[16]; /* IET supports only one portal */
 static struct sockaddr_storage ss;
 
+#ifdef ISCSITARGET
 int isns_scn_allow(uint32_t tid, char *name)
 {
 	struct isns_initiator *ini;
@@ -80,10 +80,12 @@ int isns_scn_allow(uint32_t tid, char *name)
 	}
 	return 0;
 }
+#endif
 
 static int isns_get_ip(int fd)
 {
-	int err, i;
+	int err;
+	size_t i;
 	uint32_t addr;
 	union {
 		struct sockaddr s;
@@ -233,6 +235,7 @@ static int isns_scn_deregister(char *name)
 #define set_scn_flag(x) (x)
 #endif
 
+#ifdef ISCSITARGET
 static int isns_scn_register(void)
 {
 	int err;
@@ -278,7 +281,9 @@ static int isns_scn_register(void)
 
 	return 0;
 }
+#endif
 
+#if ISCSITARGET
 static int isns_attr_query(char *name)
 {
 	int err;
@@ -333,7 +338,15 @@ static int isns_attr_query(char *name)
 
 	return 0;
 }
+#else
+static int isns_attr_query(char *name)
+{
+	printf("%s(%s)\n", __func__, name);
+	return 0;
+}
+#endif
 
+#ifdef ISCSITARGET
 static int isns_deregister(void)
 {
 	int err;
@@ -353,7 +366,7 @@ static int isns_deregister(void)
 	memset(buf, 0, sizeof(buf));
 	tlv = (struct isns_tlv *) hdr->pdu;
 
-	target = list_entry(targets_list.q_forw, struct target, tlist);
+	target = list_entry(targets_list, struct target, tlist);
 
 	length += isns_tlv_set(&tlv, ISNS_ATTR_ISCSI_NAME,
 			       strlen(target->name) + 1, target->name);
@@ -370,7 +383,15 @@ static int isns_deregister(void)
 		log_error("%s %d: %s", __FUNCTION__, __LINE__, strerror(errno));
 	return 0;
 }
+#else
+static int isns_deregister(void)
+{
+	printf("%s(void)\n", __func__);
+	return 0;
+}
+#endif
 
+#ifdef ISCSITARGET
 int isns_target_register(char *name)
 {
 	char buf[4096];
@@ -439,7 +460,9 @@ int isns_target_register(char *name)
 
 	return 0;
 }
+#endif
 
+#ifdef ISCSITARGET
 static void free_all_acl(struct target *target)
 {
 	struct isns_initiator *ini;
@@ -450,7 +473,9 @@ static void free_all_acl(struct target *target)
 		free(ini);
 	}
 }
+#endif
 
+#ifdef ISCSITARGET
 int isns_target_deregister(char *name)
 {
 	char buf[4096];
@@ -496,6 +521,7 @@ int isns_target_deregister(char *name)
 
 	return 0;
 }
+#endif
 
 static int recv_hdr(int fd, struct isns_io *rx, struct isns_hdr *hdr)
 {
@@ -507,7 +533,7 @@ static int recv_hdr(int fd, struct isns_io *rx, struct isns_hdr *hdr)
 		if (err < 0) {
 			if (errno == EAGAIN || errno == EINTR)
 				return -EAGAIN;
-			log_error("header read error %d %d %d %d",
+			log_error("header read error %d %d %d %zu",
 				  fd, err, errno, rx->offset);
 			return -1;
 		} else if (err == 0)
@@ -517,7 +543,7 @@ static int recv_hdr(int fd, struct isns_io *rx, struct isns_hdr *hdr)
 		rx->offset += err;
 
 		if (rx->offset < sizeof(*hdr)) {
-			log_debug(1, "header wait %d %d", rx->offset, err);
+			log_debug(1, "header wait %zu %d", rx->offset, err);
 			return -EAGAIN;
 		}
 	}
@@ -559,7 +585,7 @@ static int recv_pdu(int fd, struct isns_io *rx, struct isns_hdr *hdr)
 		if (err < 0) {
 			if (errno == EAGAIN || errno == EINTR)
 				return -EAGAIN;
-			log_error("pdu read error %d %d %d %d",
+			log_error("pdu read error %d %d %d %zu",
 				  fd, err, errno, rx->offset);
 			return -1;
 		} else if (err == 0)
@@ -569,7 +595,7 @@ static int recv_pdu(int fd, struct isns_io *rx, struct isns_hdr *hdr)
 		rx->offset += err;
 
 		if (rx->offset < length + sizeof(*hdr)) {
-			log_error("pdu wait %d %d", rx->offset, err);
+			log_error("pdu wait %zu %d", rx->offset, err);
 			return -EAGAIN;
 		}
 	}
@@ -639,6 +665,7 @@ static char *print_scn_pdu(struct isns_hdr *hdr)
 	return name;
 }
 
+#ifdef ISCSITARGET
 static void qry_rsp_handle(struct isns_hdr *hdr)
 {
 	struct isns_tlv *tlv;
@@ -742,8 +769,14 @@ found:
 free_qry_mgmt:
 	free(mgmt);
 }
+#else
+static void qry_rsp_handle(struct isns_hdr *hdr)
+{
+	printf("%s(%p)\n", __func__, hdr);
+}
+#endif
 
-int isns_handle(int is_timeout, int *timeout)
+int isns_handle(int is_timeout, int *timeout __attribute__ ((unused)))
 {
 	int err;
 	struct isns_io *rx = &isns_rx;
@@ -886,7 +919,7 @@ int isns_scn_handle(int is_accept)
 	return 0;
 }
 
-static int scn_init(char *addr)
+static int scn_init(char *addr __attribute__ ((unused)))
 {
 	int fd, opt, err;
 	union {
@@ -981,13 +1014,14 @@ int isns_init(char *addr, int isns_ac)
 
 void isns_exit(void)
 {
+#ifdef ISCSITARGET
 	struct target *target;
+#endif
 
 	if (!use_isns)
 		return;
 
-	list_for_each_entry(target, &targets_list, tlist)
-		isns_scn_deregister(target->name);
+	isns_scn_deregister("foo");
 
 	isns_deregister();
 	/* we can't receive events any more. */
