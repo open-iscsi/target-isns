@@ -25,6 +25,15 @@
 #include <linux/limits.h>
 #include <stdbool.h>
 #include <sys/inotify.h>
+#include <ccan/list/list.h>
+
+struct target {
+	struct list_node list;
+	char name[256];
+	struct list_head tpgs;
+	bool updated;
+	int watch_fd;
+};
 
 bool configfs_iscsi_path_exists(void);
 

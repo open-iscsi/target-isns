@@ -54,22 +54,16 @@
 #include <sys/types.h>
 #include <unistd.h>
 
+#include "isns.h"
+#include "log.h"
 
 #define CONFIGFS_ISCSI_PATH	"/sys/kernel/config/target/iscsi"
 #define INOTIFY_MASK	       	(IN_CREATE | IN_DELETE | IN_MODIFY)
 #define INOTIFY_BUF_LEN		(16 * (sizeof(struct inotify_event) + NAME_MAX + 1))
 
 
-static struct list_head targets = LIST_HEAD_INIT(targets);
+LIST_HEAD(targets);
 static int inotify_fd = -1;
-
-struct target {
-	struct list_node list;
-	char name[224];
-	struct list_head tpgs;
-	bool updated;
-	int watch_fd;
-};
 
 struct tpg {
 	struct list_node list;
@@ -113,7 +107,7 @@ static struct target *configfs_target_init(const char *name)
 	tgt->updated = false;
 	tgt->watch_fd = inotify_add_watch(inotify_fd, path, INOTIFY_MASK);
 	list_head_init(&tgt->tpgs);
-	list_add(&targets, &tgt->list);
+	list_add_tail(&targets, &tgt->list);
 
 	return tgt;
 }
@@ -287,6 +281,8 @@ static int configfs_target_update(struct target *tgt)
 	}
 	tgt->updated = true;
 
+	isns_target_register(tgt->name);
+
 	return 0;
 }
 
@@ -361,6 +357,7 @@ void configfs_cleanup(void)
 			inotify_rm_watch(inotify_fd, tpg->watch_fd);
 			free(tpg);
 		}
+		isns_target_deregister(tgt->name);
 		list_del(&tgt->list);
 		inotify_rm_watch(inotify_fd, tgt->watch_fd);
 		free(tgt);
@@ -376,14 +373,14 @@ void configfs_show(void)
 	char str[INET6_ADDRSTRLEN];
 
 	list_for_each(&targets, tgt, list) {
-		printf("target: name = %s\n", tgt->name);
+		log_print(LOG_DEBUG, "target: name = %s", tgt->name);
 		list_for_each(&tgt->tpgs, tpg, list) {
-			printf("  tpg: id = %" PRIu32 ", enabled = %d\n",
-			       tpg->id, tpg->enabled);
+			log_print(LOG_DEBUG, "  tpg: id = %" PRIu32 ", enabled = %d",
+				  tpg->id, tpg->enabled);
 			list_for_each(&tpg->portals, portal, list) {
 				inet_ntop(portal->domain, portal->ip_addr, str, INET6_ADDRSTRLEN);
-				printf("    portal: domain = %d, ip_addr = %s, port = %d\n",
-				       portal->domain, str, portal->port);
+				log_print(LOG_DEBUG, "    portal: domain = %d, ip_addr = %s, port = %d",
+					  portal->domain, str, portal->port);
 			}
 		}
 	}
@@ -403,20 +400,14 @@ void configfs_handle_target(const struct inotify_event *event)
 	if ((event->mask & IN_CREATE) && tgt == NULL) {
 		tgt = configfs_target_init(event->name);
 		configfs_target_update(tgt);
-		printf("xxx target %s added\n", tgt->name);
 	} else if ((event->mask & IN_DELETE) && tgt) {
-		printf("xxx target %s removed\n", tgt->name);
+		isns_target_deregister(tgt->name);
 		list_del(&tgt->list);
 		inotify_rm_watch(inotify_fd, tgt->watch_fd);
 		free(tgt);
 	} else if ((event->mask & IN_MODIFY) && tgt) {
-		printf("xxx target %s updated\n", tgt->name);
 		configfs_target_update(tgt);
-	} else {
-		printf("xxx tgt: mask = %d, tgt = %p\n", event->mask, tgt);
 	}
-
-	configfs_show();
 }
 
 void configfs_handle_tpg(const struct inotify_event *event)
@@ -436,29 +427,23 @@ void configfs_handle_tpg(const struct inotify_event *event)
 			}
 		}
 	}
+	if (tpg == NULL)
+		return;
 found:
 	if ((event->mask & IN_CREATE) && tpg == NULL) {
-		printf("xxx tpg %" PRIu32 " added\n", tpg_id);
 		tpg = configfs_tpg_init(tgt, tpg_id);
 		configfs_tpg_update(tgt, tpg);
 	} else if ((event->mask & IN_DELETE) && tpg) {
-		printf("xxx tpg %" PRIu32 " removed\n", tpg_id);
 		list_del(&tpg->list);
 		inotify_rm_watch(inotify_fd, tpg->watch_fd);
 		free(tpg);
 	} else if ((event->mask & IN_MODIFY) && tpg) {
-		printf("xxx tpg %" PRIu32 " updated\n", tpg_id);
 		configfs_tpg_update(tgt, tpg);
-	} else {
-		printf("xxx tpg: mask = %d, tpg = %p\n", event->mask, tpg);
 	}
-
-	configfs_show();
 }
 
-void configfs_handle_portal(const struct inotify_event *event)
+void configfs_handle_portal(const struct inotify_event *event __attribute__ ((unused)))
 {
-	printf("%s(): %p\n", __func__, event);
 	return;
 }
 
@@ -473,7 +458,6 @@ void configfs_handle_events(void)
 	for (p = buf; p < buf + nr; ) {
 		event = (struct inotify_event*) p;
 		p += sizeof(struct inotify_event) + event->len;
-		printf("event: name = %s\n", event->name);
 		if (strstarts(event->name, "iqn."))
 			configfs_handle_target(event);
 		else if (strstarts(event->name, "tpgt_"))

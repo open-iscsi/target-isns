@@ -31,13 +31,17 @@
 #include <netinet/tcp.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <ccan/list/list.h>
+#include <ccan/str/str.h>
 
+#include "configfs.h"
 #include "isns_proto.h"
 #include "log.h"
 
 #define ISCSI_NAME_LEN	256
 
 extern void isns_set_fd(int isns, int scn_listen, int scn);
+extern struct list_head targets;
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 #define BUFSIZE (1 << 18)
@@ -47,6 +51,13 @@ struct isns_io {
 	size_t offset;
 };
 
+struct isns_query {
+	char name[ISCSI_NAME_LEN];
+	uint16_t transaction;
+	struct list_node list;
+};
+
+static LIST_HEAD(query_list);
 static uint16_t scn_listen_port;
 static int isns_fd, scn_listen_fd, scn_fd;
 static struct isns_io isns_rx, scn_rx;
@@ -210,7 +221,6 @@ static int isns_scn_deregister(char *name)
 #define set_scn_flag(x) (x)
 #endif
 
-#ifdef ISCSITARGET
 static int isns_scn_register(void)
 {
 	int err;
@@ -221,7 +231,7 @@ static int isns_scn_register(void)
 	struct isns_tlv *tlv;
 	struct target *target;
 
-	if (list_empty(&targets_list))
+	if (list_empty(&targets))
 		return 0;
 
 	if (!isns_fd)
@@ -231,7 +241,7 @@ static int isns_scn_register(void)
 	memset(buf, 0, sizeof(buf));
 	tlv = (struct isns_tlv *) hdr->pdu;
 
-	target = list_entry(targets_list.q_forw, struct target, tlist);
+	target = list_top(&targets, struct target, list);
 
 	length += isns_tlv_set(&tlv, ISNS_ATTR_ISCSI_NAME,
 			       strlen(target->name) + 1, target->name);
@@ -256,14 +266,7 @@ static int isns_scn_register(void)
 
 	return 0;
 }
-#else
-static int isns_scn_register(void)
-{
-	return 0;
-}
-#endif
 
-#ifdef ISCSITARGET
 static int isns_attr_query(char *name)
 {
 	int err;
@@ -271,30 +274,30 @@ static int isns_attr_query(char *name)
 	char buf[4096];
 	struct isns_hdr *hdr = (struct isns_hdr *) buf;
 	struct isns_tlv *tlv;
-	struct target *target;
 	uint32_t node = htonl(ISNS_NODE_INITIATOR);
-	struct isns_qry_mgmt *mgmt;
+	struct isns_query *query;
+	struct target *target;
 
-	if (list_empty(&targets_list))
+	if (list_empty(&targets))
 		return 0;
 
 	if (!isns_fd)
 		if (isns_connect() < 0)
 			return 0;
 
-	mgmt = malloc(sizeof(*mgmt));
-	if (!mgmt)
+	query = malloc(sizeof(struct isns_query));
+	if (query == NULL)
 		return 0;
-	insque(&mgmt->qlist, &qry_list);
+	list_add(&query_list, &query->list);
 
 	memset(buf, 0, sizeof(buf));
 	tlv = (struct isns_tlv *) hdr->pdu;
 
 	if (name)
-		snprintf(mgmt->name, sizeof(mgmt->name), "%s", name);
+		snprintf(query->name, sizeof(query->name), "%s", name);
 	else {
-		mgmt->name[0] = '\0';
-		target = list_entry(targets_list.q_forw, struct target, tlist);
+		query->name[0] = '\0';
+		target = list_top(&targets, struct target, list);
 		name = target->name;
 	}
 
@@ -310,7 +313,7 @@ static int isns_attr_query(char *name)
 	flags = ISNS_FLAG_CLIENT | ISNS_FLAG_LAST_PDU | ISNS_FLAG_FIRST_PDU;
 	isns_hdr_init(hdr, ISNS_FUNC_DEV_ATTR_QRY, length, flags,
 		      ++transaction, 0);
-	mgmt->transaction = transaction;
+	query->transaction = transaction;
 
 	err = write(isns_fd, buf, length + sizeof(struct isns_hdr));
 	if (err < 0)
@@ -318,15 +321,7 @@ static int isns_attr_query(char *name)
 
 	return 0;
 }
-#else
-static int isns_attr_query(char *name)
-{
-	printf("%s(%s)\n", __func__, name);
-	return 0;
-}
-#endif
 
-#ifdef ISCSITARGET
 static int isns_deregister(void)
 {
 	int err;
@@ -336,7 +331,7 @@ static int isns_deregister(void)
 	struct isns_tlv *tlv;
 	struct target *target;
 
-	if (list_empty(&targets_list))
+	if (list_empty(&targets))
 		return 0;
 
 	if (!isns_fd)
@@ -346,7 +341,7 @@ static int isns_deregister(void)
 	memset(buf, 0, sizeof(buf));
 	tlv = (struct isns_tlv *) hdr->pdu;
 
-	target = list_entry(targets_list, struct target, tlist);
+	target = list_top(&targets, struct target, list);
 
 	length += isns_tlv_set(&tlv, ISNS_ATTR_ISCSI_NAME,
 			       strlen(target->name) + 1, target->name);
@@ -363,13 +358,6 @@ static int isns_deregister(void)
 		log_print(LOG_ERR, "%s %d: %s", __func__, __LINE__, strerror(errno));
 	return 0;
 }
-#else
-static int isns_deregister(void)
-{
-	printf("%s(void)\n", __func__);
-	return 0;
-}
-#endif
 
 int isns_target_register(char *name)
 {
@@ -381,11 +369,17 @@ int isns_target_register(char *name)
 	uint32_t node = htonl(ISNS_NODE_TARGET);
 	uint32_t type = htonl(2);
 	int err;
-	int initial = 1; /* was list_length_is_one(&targets_list); */
+	bool first;
+	struct target *target;
 
 	if (!isns_fd)
 		if (isns_connect() < 0)
 			return 0;
+
+	target = list_top(&targets, struct target, list);
+	first = streq(target->name, name);
+
+	log_print(LOG_DEBUG, "registering target %s %s", name, first ? "(first)" : "");
 
 	memset(buf, 0, sizeof(buf));
 	tlv = (struct isns_tlv *) hdr->pdu;
@@ -399,7 +393,7 @@ int isns_target_register(char *name)
 	length += isns_tlv_set(&tlv, 0, 0, 0);
 	length += isns_tlv_set(&tlv, ISNS_ATTR_ENTITY_IDENTIFIER,
 			       strlen(eid) + 1, eid);
-	if (initial) {
+	if (first) {
 		length += isns_tlv_set(&tlv, ISNS_ATTR_ENTITY_PROTOCOL,
 				       sizeof(type), &type);
 		length += isns_tlv_set(&tlv, ISNS_ATTR_PORTAL_IP_ADDRESS,
@@ -443,11 +437,17 @@ int isns_target_deregister(char *name)
 	struct isns_hdr *hdr = (struct isns_hdr *) buf;
 	struct isns_tlv *tlv;
 	int err;
-	int last = 1; /* was list_empty(&targets_list); */
+	bool last;
+	struct target *target;
 
 	if (!isns_fd)
 		if (isns_connect() < 0)
 			return 0;
+
+	target = list_tail(&targets, struct target, list);
+	last = streq(target->name, name);
+
+	log_print(LOG_DEBUG, "deregistering target %s %s", name, last ? "(last)" : "");
 
 	isns_scn_deregister(name);
 
@@ -617,21 +617,19 @@ static char *print_scn_pdu(struct isns_hdr *hdr)
 	return name;
 }
 
-#ifdef ISCSITARGET
 static void qry_rsp_handle(struct isns_hdr *hdr)
 {
 	struct isns_tlv *tlv;
 	uint16_t length = ntohs(hdr->length);
 	uint16_t transaction = ntohs(hdr->transaction);
 	uint32_t status = (uint32_t) (*hdr->pdu);
-	struct isns_qry_mgmt *mgmt, *n;
-	struct target *target;
-	struct isns_initiator *ini;
+	struct isns_query *query, *query_next;
+	struct target *target, *t;
 	char *name = NULL;
 
-	list_for_each_entry_safe(mgmt, n, &qry_list, qlist) {
-		if (mgmt->transaction == transaction) {
-			remque(&mgmt->qlist);
+	list_for_each_safe(&query_list, query, query_next, list) {
+		if (query->transaction == transaction) {
+			list_del(&query->list);
 			goto found;
 		}
 	}
@@ -647,29 +645,33 @@ found:
 		log_print(LOG_ERR, "%s %d: error response %u",
 			  __func__, __LINE__, status);
 
-		goto free_qry_mgmt;
+		goto free_query;
 	}
 
-	if (!strlen(mgmt->name)) {
+	if (!strlen(query->name)) {
 		log_print(LOG_DEBUG, "%s %d: skip %u",
 			  __func__, __LINE__, transaction);
-		goto free_qry_mgmt;
+		goto free_query;
 	}
 
-	target = target_find_by_name(mgmt->name);
-	if (!target) {
+	target = NULL;
+	list_for_each(&targets, t, list) {
+		if (streq(t->name, query->name)) {
+			target = t;
+			break;
+		}
+	}
+	if (target == NULL) {
 		log_print(LOG_ERR, "%s %d: invalid tid %s",
-			  __func__, __LINE__, mgmt->name);
-		goto free_qry_mgmt;
+			  __func__, __LINE__, query->name);
+		goto free_query;
 	}
-
-	free_all_acl(target);
 
 	/* skip status */
 	tlv = (struct isns_tlv *) ((char *) hdr->pdu + 4);
 
 	if (length < 4)
-		goto free_qry_mgmt;
+		goto free_query;
 
 	length -= 4;
 
@@ -694,19 +696,19 @@ found:
 				name = NULL;
 			break;
 		case ISNS_ATTR_ISCSI_NODE_TYPE:
-			if (vlen == 4 && name &&
-			    ntohl(*(tlv->value)) == ISNS_NODE_INITIATOR) {
-				log_print(LOG_ERR, "%s %d: %s", __func__, __LINE__,
-					  (char *) name);
-
-				ini = malloc(sizeof(*ini));
-				if (!ini)
-					goto free_qry_mgmt;
-
-				snprintf(ini->name, sizeof(ini->name), "%s",
-					 name);
-
-				insque(&ini->ilist, &target->isns_head);
+			if (vlen == 4 && name) {
+				uint32_t node_type = ntohl(*(tlv->value));
+				switch (node_type) {
+				case ISNS_NODE_CONTROL:
+					log_print(LOG_DEBUG, "%s is a control node", name);
+					break;
+				case ISNS_NODE_INITIATOR:
+					log_print(LOG_DEBUG, "%s is an initiator", name);
+					break;
+				case ISNS_NODE_TARGET:
+					log_print(LOG_DEBUG, "%s is a target", name);
+					break;
+				}
 			} else
 				name = NULL;
 			break;
@@ -719,15 +721,9 @@ found:
 		tlv = (struct isns_tlv *) ((char *) tlv->value + vlen);
 	}
 
-free_qry_mgmt:
-	free(mgmt);
+free_query:
+	free(query);
 }
-#else
-static void qry_rsp_handle(struct isns_hdr *hdr)
-{
-	printf("%s(%p)\n", __func__, hdr);
-}
-#endif
 
 int isns_handle(bool is_timeout, int *timeout __attribute__ ((unused)))
 {
@@ -917,7 +913,7 @@ static int scn_init(char *addr __attribute__ ((unused)))
 	else
 		scn_listen_port = ntohs((&l.s4)->sin_port);
 
-	log_print(LOG_ERR, "scn listen port %u %d %d\n", scn_listen_port, fd, err);
+	log_print(LOG_ERR, "scn listen port %u %d %d", scn_listen_port, fd, err);
 out:
 	if (err)
 		close(fd);
@@ -964,11 +960,11 @@ int isns_init(char *addr)
 
 void isns_exit(void)
 {
-#ifdef ISCSITARGET
 	struct target *target;
-#endif
 
-	isns_scn_deregister("foo");
+	list_for_each(&targets, target, list) {
+		isns_scn_deregister(target->name);
+	}
 
 	isns_deregister();
 	/* we can't receive events any more. */
