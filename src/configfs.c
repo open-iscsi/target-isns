@@ -200,7 +200,7 @@ static int configfs_tpg_update(struct target *tgt, struct tpg *tpg)
 		portal = NULL;
 		list_for_each(&tpg->portals, p, list) {
 			if (memcmp(p->ip_addr, ip_addr, sizeof(ip_addr)) == 0 &&
-			    p->port == portal->port)
+			    p->port == port)
 				portal = p;
 		}
 
