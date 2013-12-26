@@ -354,7 +354,7 @@ int isns_target_register(char *name)
 	uint16_t flags = 0, length = 0;
 	struct isns_hdr *hdr = (struct isns_hdr *) buf;
 	struct isns_tlv *tlv;
-	uint32_t port = 3260; /* FIXME: */
+	uint32_t port = htonl(3260); /* FIXME: */
 	uint32_t node = htonl(ISNS_NODE_TARGET);
 	uint32_t type = htonl(2);
 	int err;
