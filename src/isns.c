@@ -19,6 +19,7 @@
 #include <netinet/tcp.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+#include <ccan/array_size/array_size.h>
 #include <ccan/list/list.h>
 #include <ccan/str/str.h>
 
@@ -31,7 +32,6 @@
 extern void isns_set_fd(int isns, int scn_listen, int scn);
 extern struct list_head targets;
 
-#define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
 #define BUFSIZE (1 << 18)
 
 struct isns_io {
