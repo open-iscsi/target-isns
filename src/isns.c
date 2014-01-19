@@ -15,6 +15,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <arpa/inet.h>
 #include <netinet/in.h>
 #include <netinet/tcp.h>
 #include <sys/socket.h>
@@ -121,7 +122,7 @@ static int isns_connect(void)
 		return -1;
 	}
 
-	log_print(LOG_ERR, "%s %d: new connection %d", __func__, __LINE__, fd);
+	log_print(LOG_INFO, "iSNS connection opened");
 
 	if (!strlen(eid)) {
 		err = isns_get_ip(fd);
@@ -141,6 +142,11 @@ static void isns_hdr_init(struct isns_hdr *hdr, uint16_t function,
 			  uint16_t length, uint16_t flags,
 			  uint16_t trans, uint16_t sequence)
 {
+	log_print(LOG_DEBUG, "gen header %s: "
+		  "len = %hu, flags = 0x%hx, tx = %hu, seq = %hu",
+		  isns_function_get_abbr(function),
+		  length, flags, trans, sequence);
+
 	hdr->version = htons(0x0001);
 	hdr->function = htons(function);
 	hdr->length = htons(length);
@@ -468,25 +474,22 @@ int isns_target_deregister(char *name)
 
 static int recv_hdr(int fd, struct isns_io *rx, struct isns_hdr *hdr)
 {
-	int err;
-
 	if (rx->offset < sizeof(*hdr)) {
-		err = read(fd, rx->buf + rx->offset,
-			   sizeof(*hdr) - rx->offset);
+		ssize_t err = read(fd, rx->buf + rx->offset,
+				   sizeof(*hdr) - rx->offset);
 		if (err < 0) {
 			if (errno == EAGAIN || errno == EINTR)
 				return -EAGAIN;
-			log_print(LOG_ERR, "header read error %d %d %d %zu",
+			log_print(LOG_ERR, "header read error %d %zd %d %zu",
 				  fd, err, errno, rx->offset);
 			return -1;
 		} else if (err == 0)
 			return -1;
 
-		log_print(LOG_DEBUG, "header %d %d bytes!", fd, err);
 		rx->offset += err;
 
 		if (rx->offset < sizeof(*hdr)) {
-			log_print(LOG_DEBUG, "header wait %zu %d", rx->offset, err);
+			log_print(LOG_DEBUG, "header wait %zu %zd", rx->offset, err);
 			return -EAGAIN;
 		}
 	}
@@ -514,8 +517,10 @@ static int recv_pdu(int fd, struct isns_io *rx, struct isns_hdr *hdr)
 
 	/* Now we got a complete header */
 	get_hdr_param(hdr, function, length, flags, transaction, sequence);
-	log_print(LOG_DEBUG, "got a header %x %u %x %u %u", function, length, flags,
-		  transaction, sequence);
+	log_print(LOG_DEBUG, "got header %s: "
+		  "len = %hu, flags = 0x%hx, tx = %hu, seq = %hu",
+		  isns_function_get_abbr(function),
+		  length, flags, transaction, sequence);
 
 	if (length + sizeof(*hdr) > BUFSIZE) {
 		log_print(LOG_ERR, "FIXME we cannot handle this yet %u!", length);
@@ -534,7 +539,6 @@ static int recv_pdu(int fd, struct isns_io *rx, struct isns_hdr *hdr)
 		} else if (err == 0)
 			return -1;
 
-		log_print(LOG_DEBUG, "pdu %u %u", fd, err);
 		rx->offset += err;
 
 		if (rx->offset < length + sizeof(*hdr)) {
@@ -904,7 +908,7 @@ static int scn_init(char *addr __attribute__ ((unused)))
 	else
 		scn_listen_port = ntohs((&l.s4)->sin_port);
 
-	log_print(LOG_ERR, "scn listen port %u %d %d", scn_listen_port, fd, err);
+	log_print(LOG_ERR, "SCN listen port is %hu", scn_listen_port);
 out:
 	if (err)
 		close(fd);
@@ -921,6 +925,8 @@ int isns_init(char *addr)
 	int err;
 	char port[8];
 	struct addrinfo hints, *res;
+
+	log_print(LOG_INFO, "iSNS server is %s", addr);
 
 	snprintf(port, sizeof(port), "%d", ISNS_PORT);
 	memset(&hints, 0, sizeof(hints));

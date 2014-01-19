@@ -30,35 +30,45 @@ struct isns_tlv {
 	uint32_t value[0];
 } __attribute__ ((packed));
 
-/* Commands and responses (4.1.3) */
-#define ISNS_FUNC_DEV_ATTR_REG			0x0001
-#define ISNS_FUNC_DEV_ATTR_QRY			0x0002
-#define ISNS_FUNC_DEV_GET_NEXT			0x0003
-#define ISNS_FUNC_DEV_DEREG			0x0004
-#define ISNS_FUNC_SCN_REG			0x0005
-#define ISNS_FUNC_SCN_DEREG			0x0006
-#define ISNS_FUNC_SCN_EVENT			0x0007
-#define ISNS_FUNC_SCN				0x0008
-#define ISNS_FUNC_DD_REG			0x0009
-#define ISNS_FUNC_DD_DEREG			0x000a
-#define ISNS_FUNC_DDS_REG			0x000b
-#define ISNS_FUNC_DDS_DEREG			0x000c
-#define ISNS_FUNC_ESI				0x000d
-#define ISNS_FUNC_HEARTBEAT			0x000e
+/* X-macro describing iSNSP commands and responses (4.1.3) */
+#define ISNS_MESSAGE_TABLE						\
+	X(ISNS_FUNC_DEV_ATTR_REG,	"DevAttrReg",		0x0001)	\
+	X(ISNS_FUNC_DEV_ATTR_QRY,	"DevAttrQry",		0x0002)	\
+	X(ISNS_FUNC_DEV_GET_NEXT,	"DevGetNext",		0x0003)	\
+	X(ISNS_FUNC_DEV_DEREG,		"DevDereg",		0x0004)	\
+	X(ISNS_FUNC_SCN_REG,		"SCNReg",		0x0005)	\
+	X(ISNS_FUNC_SCN_DEREG,		"SCNDereg",		0x0006)	\
+	X(ISNS_FUNC_SCN_EVENT,		"SCNEvent",		0x0007)	\
+	X(ISNS_FUNC_SCN,		"SCN",			0x0008)	\
+	X(ISNS_FUNC_DD_REG,		"DDReg",		0x0009)	\
+	X(ISNS_FUNC_DD_DEREG,		"DDDereg",		0x000a)	\
+	X(ISNS_FUNC_DDS_REG,		"DDSReg",		0x000b)	\
+	X(ISNS_FUNC_DDS_DEREG,		"DDSDereg",		0x000c)	\
+	X(ISNS_FUNC_ESI,		"ESI",			0x000d)	\
+	X(ISNS_FUNC_HEARTBEAT,		"Heartbeat",		0x000e)	\
+									\
+	X(ISNS_FUNC_DEV_ATTR_REG_RSP,	"DevAttrRegRsp",	0x8001)	\
+	X(ISNS_FUNC_DEV_ATTR_QRY_RSP,	"DevAttrQryRsp",	0x8002)	\
+	X(ISNS_FUNC_DEV_GET_NEXT_RSP,	"DevGetNextRsp",	0x8003)	\
+	X(ISNS_FUNC_DEV_DEREG_RSP,	"DevDeregRsp",		0x8004)	\
+	X(ISNS_FUNC_SCN_REG_RSP,	"SCNRegRsp",		0x8005)	\
+	X(ISNS_FUNC_SCN_DEREG_RSP,	"SCNDeregRsp",		0x8006)	\
+	X(ISNS_FUNC_SCN_EVENT_RSP,	"SCNEventRsp",		0x8007)	\
+	X(ISNS_FUNC_SCN_RSP,		"SCNRsp",		0x8008)	\
+	X(ISNS_FUNC_DD_REG_RSP,		"DDRegRsp",		0x8009)	\
+	X(ISNS_FUNC_DD_DEREG_RSP,	"DDDeregRsp",		0x800a)	\
+	X(ISNS_FUNC_DDS_REG_RSP,	"DDSRegRsp",		0x800b)	\
+	X(ISNS_FUNC_DDS_DEREG_RSP,	"DDSDeregRsp",		0x800c)	\
+	X(ISNS_FUNC_ESI_RSP,		"ESIRsp",		0x800d)	\
 
-#define ISNS_FUNC_DEV_ATTR_REG_RSP		0x8001
-#define ISNS_FUNC_DEV_ATTR_QRY_RSP		0x8002
-#define ISNS_FUNC_DEV_GET_NEXT_RSP		0x8003
-#define ISNS_FUNC_DEV_DEREG_RSP			0x8004
-#define ISNS_FUNC_SCN_REG_RSP			0x8005
-#define ISNS_FUNC_SCN_DEREG_RSP			0x8006
-#define ISNS_FUNC_SCN_EVENT_RSP			0x8007
-#define ISNS_FUNC_SCN_RSP			0x8008
-#define ISNS_FUNC_DD_REG_RSP			0x8009
-#define ISNS_FUNC_DD_DEREG_RSP			0x800a
-#define ISNS_FUNC_DDS_REG_RSP			0x800b
-#define ISNS_FUNC_DDS_DEREG_RSP			0x800c
-#define ISNS_FUNC_ESI_RSP			0x800d
+#define X(MSG, ABBR, ID) MSG = ID,
+/* Enumeration of iSNSP commands and responses */
+enum {
+        ISNS_MESSAGE_TABLE
+};
+#undef X
+
+const char *isns_function_get_abbr(uint16_t function);
 
 /* iSNSP flags (5.1.4) */
 #define ISNS_FLAG_CLIENT			(1U << 15)

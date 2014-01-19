@@ -14,6 +14,7 @@ add_library(ccan STATIC
 add_executable(target-isns
   configfs.c
   isns.c
+  isns_proto.c
   log.c
   util.c
   target-isns.c)
