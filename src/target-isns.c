@@ -124,6 +124,7 @@ int main(int argc, char *argv[])
 			break;
 		case 'd':
 			config.log_level = LOG_DEBUG;
+			daemon = false;
 			break;
 		case 'f':
 			daemon = false;
