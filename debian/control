@@ -1,0 +1,16 @@
+Source: target-isns
+Section: admin
+Priority: extra
+Maintainer: Alexey Tulia <foss@sam-solutions.net>
+Build-Depends: debhelper (>= 8.0.0), cmake
+Standards-Version: 3.9.3
+Homepage: https://github.com/cvubrugier/target-isns
+#Vcs-Git: https://github.com/cvubrugier/target-isns.git
+#Vcs-Browser: https://github.com/cvubrugier/target-isns.git;a=summary
+
+Package: target-isns
+Architecture: linux-any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Target-isns is an Internet Storage Name Service (iSNS) client.
+ Target-isns is an Internet Storage Name Service (iSNS) client for the Linux LIO iSCSI target.
+ It allows to register LIO iSCSI targets to an iSNS server.
