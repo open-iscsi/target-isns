@@ -45,6 +45,7 @@ static void print_usage(void)
 {
 	printf("Usage: " PROGNAME " [OPTIONS]\n"
 	       "  -i, --isns-server  Set the IP address of the iSNS server.\n"
+	       "  -p, --isns-port    Set the remote port for iSNS server.\n"
 	       "  -d, --debug        Increase the debugging level (implies -f).\n"
 	       "  -f, --foreground   Run in the foreground.\n"
 	       "  -v, --version      Print version information.\n"
@@ -101,9 +102,10 @@ static int signal_init(void)
 
 int main(int argc, char *argv[])
 {
-	char optstring[] = "i:dfvh";
+	char optstring[] = "i:p:dfvh";
 	struct option longopts[] = {
 		{"isns-server", 1, NULL, 'i'},
+		{"isns-port",   1, NULL, 'p'},
 		{"debug",       0, NULL, 'd'},
 		{"foreground",  0, NULL, 'f'},
 		{"version",     0, NULL, 'v'},
@@ -128,6 +130,9 @@ int main(int argc, char *argv[])
 			const size_t sz = sizeof(config.isns_server);
 			strncpy(config.isns_server, optarg, sz);
 			config.isns_server[sz - 1] = '\0';
+			break;
+		case 'p':
+			sscanf(optarg, "%hu", &config.isns_port);
 			break;
 		case 'd':
 			config.log_level = LOG_DEBUG;
