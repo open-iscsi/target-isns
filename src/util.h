@@ -8,8 +8,11 @@
 #ifndef __UTIL_H__
 #define __UTIL_H__
 
+#include <inttypes.h>
+
 struct {
 	char isns_server[64];
+	uint16_t isns_port;
 	int log_level;
 } config;
 

@@ -167,7 +167,7 @@ int main(int argc, char *argv[])
 	log_print(LOG_INFO, PROGNAME " version " VERSION " started");
 
 	epoll_init_fds();
-	if (isns_init(config.isns_server) == -1) {
+	if (isns_init(config.isns_server, config.isns_port) == -1) {
 		log_print(LOG_ERR, "failed to initialize iSNS client");
 		goto quit;
 	}

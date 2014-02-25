@@ -6,6 +6,7 @@
  */
 
 #include "util.h"
+#include "isns_proto.h"
 #include "log.h"
 #include <ccan/str/str.h>
 #include <ctype.h>
@@ -40,6 +41,7 @@ int conffile_read(void)
 
 	memset(&config, sizeof(config), 0);
 	config.log_level = LOG_INFO;
+	config.isns_port = ISNS_PORT;
 
 	if ((file = fopen(CONFFILE, "r")) == NULL) {
 		log_print(LOG_ERR, "Could not read " CONFFILE);
@@ -89,6 +91,8 @@ int conffile_read(void)
 			const size_t sz = sizeof(config.isns_server);
 			strncpy(config.isns_server, value, sz);
 			config.isns_server[sz - 1] = '\0';
+		} else if (streq(key, "isns_port")) {
+			sscanf(value, "%hu", &config.isns_port);
 		} else if (streq(key, "log_level")) {
 			if (streq(value, "info"))
 				config.log_level = LOG_INFO;
