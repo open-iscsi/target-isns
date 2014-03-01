@@ -22,9 +22,9 @@
 #include "isns.h"
 #include "log.h"
 #include "util.h"
+#include "version.h"
 
-#define PROGNAME	"target-isns"
-#define VERSION		"0.1"
+#define PROGNAME "target-isns"
 
 enum {
 	EPOLL_INOTIFY = 0,	/* config FS notifications */
