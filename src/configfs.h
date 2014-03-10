@@ -15,7 +15,7 @@
 
 struct target {
 	struct list_node list;
-	char name[256];
+	char name[224];
 	struct list_head tpgs;
 	bool updated;
 	int watch_fd;
