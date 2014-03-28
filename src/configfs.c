@@ -10,20 +10,25 @@
  * representation of the iSCSI configuration by browsing and watching
  * the config file system.
  *
- * There may be one or several targets. Each target can contain one or
- * several target portal groups (TPG) and each TPG can contain one or
- * several portals. These elements are monitored with inotify. Because
+ * There may be one or more targets. Each target can contain one or
+ * more target portal groups (TPG) and each TPG can contain one or
+ * more portals. These elements are monitored with inotify. Because
  * inotify monitoring of directories is not recursive, inotify watches
  * must be created in directories whose content is of interest (marked
  * 'W' below).
  *
- *   targets                W
- *   +-- target 1           W
- *   |   +-- tpg 1          W
- *   |   |   +-- portal 1
- *   |   |   +-- portal N
- *   |   +-- tpg N          W
- *   +-- target N           W
+ *   configfs hierarchy                     target-isns data structure
+ *
+ *   /sys/kernel/config/target/iscsi/   W   targets
+ *   +-- $IQN 1                         W   +-- target 1
+ *   |   +-- tpgt_1                     W   |   +-- tpg 1
+ *   |   |   +-- np                     W   |   |   |
+ *   |   |   |   +-- $IP:$PORT              |   |   +-- portal 1
+ *   |   |   |   +-- $IP:$PORT              |   |   +-- portal 2
+ *   |   |   +-- param                      |   |
+ *   |   |       +-- TargetAlias            |   |
+ *   |   +-- tpgt_N                     W   |   +-- tpg N
+ *   +-- $IQN N                         W   +-- target N
  */
 
 #include "configfs.h"
