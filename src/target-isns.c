@@ -37,6 +37,7 @@ enum {
 
 static int epoll_fd;
 static int epoll_set[EPOLL_MAX_FD];
+static struct epoll_event epoll_events[EPOLL_MAX_FD];
 
 static void print_usage(void)
 {
@@ -64,10 +65,10 @@ static void epoll_add_fd(int epoll_id, int fd)
 		epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd, NULL);
 		close(fd);
 	} else {
-		struct epoll_event ev;
-		ev.events = EPOLLIN;
-		ev.data.fd = fd;
-		epoll_ctl(epoll_fd, EPOLL_CTL_ADD, fd, &ev);
+		struct epoll_event *ev = &epoll_events[epoll_id];
+		ev->events = EPOLLIN;
+		ev->data.fd = fd;
+		epoll_ctl(epoll_fd, EPOLL_CTL_ADD, fd, ev);
 	}
 	epoll_set[epoll_id] = fd;
 }
