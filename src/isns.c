@@ -469,6 +469,9 @@ int isns_target_deregister(char *name)
 	if (err < 0)
 		log_print(LOG_ERR, "%s %d: %s", __func__, __LINE__, strerror(errno));
 
+	if (last)
+		memset(source_attribute, 0, ISCSI_NAME_LEN);
+
 	return 0;
 }
 
