@@ -902,7 +902,7 @@ static int scn_init(char *addr __attribute__ ((unused)))
 	else
 		scn_listen_port = ntohs((&l.s4)->sin_port);
 
-	log_print(LOG_ERR, "SCN listen port is %hu", scn_listen_port);
+	log_print(LOG_DEBUG, "SCN listen port is %hu", scn_listen_port);
 out:
 	if (err)
 		close(fd);
