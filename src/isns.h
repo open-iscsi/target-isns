@@ -20,4 +20,8 @@ void isns_target_register(char *name);
 
 void isns_target_deregister(char *name);
 
+int isns_registration_timer_init(void);
+
+void isns_registration_refresh(void);
+
 #endif

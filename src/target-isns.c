@@ -27,11 +27,12 @@
 #define PROGNAME "target-isns"
 
 enum {
-	EPOLL_INOTIFY = 0,	/* config FS notifications */
-	EPOLL_SIGNAL,		/* signal handling */
-	EPOLL_ISNS,		/* iSNS (de)register commands */
-	EPOLL_SCN_LISTEN,	/* SCN connection */
-	EPOLL_SCN,		/* SCN notifications */
+	EPOLL_INOTIFY = 0,		/* config FS notifications */
+	EPOLL_SIGNAL,			/* signal handling */
+	EPOLL_ISNS,			/* iSNS (de)register commands */
+	EPOLL_SCN_LISTEN,		/* SCN connection */
+	EPOLL_SCN,			/* SCN notifications */
+	EPOLL_REGISTRATION_TIMER,	/* iSNS registration timer */
 	EPOLL_MAX_FD
 } epoll_id;
 
@@ -105,7 +106,7 @@ int main(int argc, char *argv[])
         };
 	int option;
 	int longindex = 0;
-	int ifd = 0, sfd = 0;
+	int ifd = 0, sfd = 0, tfd = 0;
 	struct epoll_event events[1];
 	ssize_t nr_events;
 	struct signalfd_siginfo siginfo;
@@ -173,6 +174,12 @@ int main(int argc, char *argv[])
 	}
 	epoll_add_fd(EPOLL_INOTIFY, ifd);
 
+	if ((tfd = isns_registration_timer_init()) == -1) {
+		log_print(LOG_ERR, "failed to create timerfd instance");
+		goto quit;
+	}
+	epoll_add_fd(EPOLL_REGISTRATION_TIMER, tfd);
+
 	if ((sfd = signal_init()) == -1) {
 		log_print(LOG_ERR, "failed to create signalfd instance");
 		goto quit;
@@ -187,15 +194,16 @@ int main(int argc, char *argv[])
 				read(sfd, &siginfo, sizeof(siginfo));
 				if (siginfo.ssi_signo == SIGQUIT || siginfo.ssi_signo == SIGINT)
 					goto quit;
-			} else if (events[i].data.fd == epoll_set[EPOLL_INOTIFY]) {
+			} else if (events[i].data.fd == epoll_set[EPOLL_INOTIFY])
 				configfs_handle_events();
-			} else if (events[i].data.fd == epoll_set[EPOLL_ISNS]) {
+			else if (events[i].data.fd == epoll_set[EPOLL_REGISTRATION_TIMER])
+				isns_registration_refresh();
+			else if (events[i].data.fd == epoll_set[EPOLL_ISNS])
 				isns_handle(false, &timeout);
-			} else if (events[i].data.fd == epoll_set[EPOLL_SCN_LISTEN]) {
+			else if (events[i].data.fd == epoll_set[EPOLL_SCN_LISTEN])
 				isns_scn_handle(true);
-			} else if (events[i].data.fd == epoll_set[EPOLL_SCN]) {
+			else if (events[i].data.fd == epoll_set[EPOLL_SCN])
 				isns_scn_handle(false);
-			}
 		}
 	}
 
@@ -204,6 +212,7 @@ quit:
 	sleep(1);
 	isns_exit();
 	close(sfd);
+	close(tfd);
 	close(ifd);
 	close(epoll_fd);
 	log_print(LOG_INFO, PROGNAME " has been stopped");

@@ -27,6 +27,7 @@
 
 #include "configfs.h"
 #include "isns_proto.h"
+#include "itimer.h"
 #include "log.h"
 
 #define ISCSI_NAME_LEN	256
@@ -35,6 +36,8 @@ extern void isns_set_fd(int isns, int scn_listen, int scn);
 extern struct list_head targets;
 
 #define BUFSIZE (1 << 18)
+#define EID_NAME_KEY "eid"
+#define DEFAULT_REGISTRATION_PERIOD 300
 
 struct isns_io {
 	char *buf;
@@ -49,7 +52,7 @@ struct isns_query {
 
 static LIST_HEAD(query_list);
 static uint16_t scn_listen_port;
-static int isns_fd, scn_listen_fd, scn_fd;
+static int isns_fd, scn_listen_fd, scn_fd, registration_timer_fd;
 static struct isns_io isns_rx, scn_rx;
 static char *rxbuf;
 static uint16_t transaction;
@@ -264,6 +267,49 @@ static int isns_scn_register(void)
 	return 0;
 }
 
+static int isns_eid_attr_query(void)
+{
+	int err;
+	uint16_t flags, length = 0;
+	char buf[4096];
+	struct isns_hdr *hdr = (struct isns_hdr *) buf;
+	struct isns_tlv *tlv;
+	struct isns_query *query;
+
+	if (list_empty(&targets))
+		return 0;
+
+	if (!isns_fd)
+		if (isns_connect() < 0)
+			return 0;
+
+	query = malloc(sizeof(*query));
+	if (!query)
+		return 0;
+	list_add(&query_list, &query->list);
+
+	memset(buf, 0, sizeof(buf));
+	tlv = (struct isns_tlv *) hdr->pdu;
+
+	strcpy(query->name, EID_NAME_KEY);
+
+	length += isns_tlv_set_string(&tlv, ISNS_ATTR_ISCSI_NAME, source_attribute);
+	length += isns_tlv_set_string(&tlv, ISNS_ATTR_ENTITY_IDENTIFIER, eid);
+	length += isns_tlv_set(&tlv, 0, 0, 0);
+	length += isns_tlv_set(&tlv, ISNS_ATTR_REGISTRATION_PERIOD, 0, 0);
+
+	flags = ISNS_FLAG_CLIENT | ISNS_FLAG_LAST_PDU | ISNS_FLAG_FIRST_PDU;
+	isns_hdr_init(hdr, ISNS_FUNC_DEV_ATTR_QRY, length, flags,
+		      ++transaction, 0);
+	query->transaction = transaction;
+
+	err = write(isns_fd, buf, length + sizeof(struct isns_hdr));
+	if (err < 0)
+		log_print(LOG_ERR, "%s %d: %s", __func__, __LINE__, strerror(errno));
+
+	return 0;
+}
+
 static int isns_attr_query(char *name)
 {
 	int err;
@@ -362,6 +408,7 @@ int isns_target_register(char *name)
 	uint32_t port = htonl(3260); /* FIXME: */
 	uint32_t node = htonl(ISNS_NODE_TARGET);
 	uint32_t type = htonl(2);
+	uint32_t period = htonl(DEFAULT_REGISTRATION_PERIOD);
 	int err;
 	bool first_registration = source_attribute[0] == '\0';
 
@@ -386,6 +433,8 @@ int isns_target_register(char *name)
 	length += isns_tlv_set(&tlv, 0, 0, 0);
 	length += isns_tlv_set_string(&tlv, ISNS_ATTR_ENTITY_IDENTIFIER, eid);
 	if (first_registration) {
+		length += isns_tlv_set(&tlv, ISNS_ATTR_REGISTRATION_PERIOD,
+				       sizeof(period), &period);
 		length += isns_tlv_set(&tlv, ISNS_ATTR_ENTITY_PROTOCOL,
 				       sizeof(type), &type);
 		length += isns_tlv_set(&tlv, ISNS_ATTR_PORTAL_IP_ADDRESS,
@@ -415,6 +464,9 @@ int isns_target_register(char *name)
 
 	if (scn_listen_port)
 		isns_scn_register();
+
+	if (first_registration)
+		isns_eid_attr_query();
 
 	isns_attr_query(name);
 
@@ -614,7 +666,6 @@ static void qry_rsp_handle(struct isns_hdr *hdr)
 	uint16_t transaction = ntohs(hdr->transaction);
 	uint32_t status = (uint32_t) (*hdr->pdu);
 	struct isns_query *query, *query_next;
-	struct target *target;
 	char *name = NULL;
 
 	list_for_each_safe(&query_list, query, query_next, list) {
@@ -644,8 +695,7 @@ found:
 		goto free_query;
 	}
 
-	target = target_find(query->name);
-	if (target == NULL) {
+	if (!streq(query->name, EID_NAME_KEY) && target_find(query->name) == NULL) {
 		log_print(LOG_ERR, "%s %d: unknown query name %s",
 			  __func__, __LINE__, query->name);
 		goto free_query;
@@ -912,6 +962,23 @@ out:
 	}
 
 	return err;
+}
+
+int isns_registration_timer_init(void)
+{
+	registration_timer_fd = itimer_create();
+	if (registration_timer_fd != -1)
+		itimer_start(registration_timer_fd, DEFAULT_REGISTRATION_PERIOD - 10);
+	return registration_timer_fd;
+}
+
+void isns_registration_refresh(void)
+{
+	uint64_t count;
+
+	read(registration_timer_fd, &count, sizeof(count));
+	log_print(LOG_DEBUG, "refreshing registration");
+	isns_eid_attr_query();
 }
 
 int isns_init(char *addr)

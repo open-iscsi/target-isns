@@ -15,6 +15,7 @@ add_executable(target-isns
   configfs.c
   isns.c
   isns_proto.c
+  itimer.c
   log.c
   util.c
   target-isns.c)
