@@ -10,6 +10,7 @@
 
 #define _POSIX_SOURCE
 #include <errno.h>
+#include <inttypes.h>
 #include <netdb.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -659,12 +660,16 @@ found:
 	length -= 4;
 
 	while (length) {
+		uint32_t tag = ntohl(tlv->tag);
 		uint32_t vlen = ntohl(tlv->length);
 
 		if (vlen + sizeof(*tlv) > length)
 			vlen = length - sizeof(*tlv);
 
-		switch (ntohl(tlv->tag)) {
+		switch (tag) {
+		case ISNS_ATTR_DELIMITER:
+		case ISNS_ATTR_ENTITY_IDENTIFIER:
+			break;
 		case ISNS_ATTR_ISCSI_NAME:
 			if (vlen) {
 				size_t slen = vlen - 1;
@@ -696,6 +701,7 @@ found:
 				name = NULL;
 			break;
 		default:
+			log_print(LOG_DEBUG, "attribute %" PRIu32 " ignored", tag);
 			name = NULL;
 			break;
 		}
