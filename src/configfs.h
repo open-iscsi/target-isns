@@ -29,4 +29,6 @@ void configfs_cleanup(void);
 
 void configfs_handle_events(void);
 
+struct target *target_find(const char *target_name);
+
 #endif

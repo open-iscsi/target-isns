@@ -613,7 +613,7 @@ static void qry_rsp_handle(struct isns_hdr *hdr)
 	uint16_t transaction = ntohs(hdr->transaction);
 	uint32_t status = (uint32_t) (*hdr->pdu);
 	struct isns_query *query, *query_next;
-	struct target *target, *t;
+	struct target *target;
 	char *name = NULL;
 
 	list_for_each_safe(&query_list, query, query_next, list) {
@@ -643,15 +643,9 @@ found:
 		goto free_query;
 	}
 
-	target = NULL;
-	list_for_each(&targets, t, list) {
-		if (streq(t->name, query->name)) {
-			target = t;
-			break;
-		}
-	}
+	target = target_find(query->name);
 	if (target == NULL) {
-		log_print(LOG_ERR, "%s %d: invalid tid %s",
+		log_print(LOG_ERR, "%s %d: unknown query name %s",
 			  __func__, __LINE__, query->name);
 		goto free_query;
 	}

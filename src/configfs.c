@@ -301,13 +301,7 @@ int configfs_init(void)
 		if (!strstarts(dirent->d_name, "iqn."))
 			continue;
 
-		struct target *t;
-		tgt = NULL;
-		list_for_each(&targets, t, list) {
-			if (streq(t->name, dirent->d_name))
-				tgt = t;
-		}
-
+		tgt = target_find(dirent->d_name);
 		if (!tgt)
 			tgt = configfs_target_init(dirent->d_name);
 		configfs_target_update(tgt);
@@ -379,14 +373,7 @@ void configfs_show(void)
 
 void configfs_handle_target(const struct inotify_event *event)
 {
-	struct target *tgt = NULL, *t;
-
-	list_for_each(&targets, t, list) {
-		if (streq(t->name, event->name)) {
-			tgt = t;
-			break;
-		}
-	}
+	struct target *tgt = target_find(event->name);
 
 	if ((event->mask & IN_CREATE) && tgt == NULL) {
 		tgt = configfs_target_init(event->name);
@@ -456,4 +443,15 @@ void configfs_handle_events(void)
 		else if (streq(event->name, "np"))
 			configfs_handle_portal(event);
 	}
+}
+
+struct target *target_find(const char *target_name)
+{
+	struct target *tgt;
+
+	list_for_each(&targets, tgt, list) {
+		if (streq(tgt->name, target_name))
+			return tgt;
+	}
+	return NULL;
 }
