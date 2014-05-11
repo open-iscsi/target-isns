@@ -57,6 +57,7 @@ static struct isns_io isns_rx, scn_rx;
 static char *rxbuf;
 static uint16_t transaction;
 static uint32_t current_timeout = 30; /* seconds */
+static uint32_t registration_period = DEFAULT_REGISTRATION_PERIOD;
 static char eid[ISCSI_NAME_LEN];
 static uint8_t ip[16]; /* IET supports only one portal */
 static struct sockaddr_storage ss;
@@ -659,6 +660,8 @@ static char *print_scn_pdu(struct isns_hdr *hdr)
 	return name;
 }
 
+static void isns_registration_set_period(uint32_t period);
+
 static void qry_rsp_handle(struct isns_hdr *hdr)
 {
 	struct isns_tlv *tlv;
@@ -667,6 +670,7 @@ static void qry_rsp_handle(struct isns_hdr *hdr)
 	uint32_t status = (uint32_t) (*hdr->pdu);
 	struct isns_query *query, *query_next;
 	char *name = NULL;
+	uint32_t period;
 
 	list_for_each_safe(&query_list, query, query_next, list) {
 		if (query->transaction == transaction) {
@@ -719,6 +723,10 @@ found:
 		switch (tag) {
 		case ISNS_ATTR_DELIMITER:
 		case ISNS_ATTR_ENTITY_IDENTIFIER:
+			break;
+		case ISNS_ATTR_REGISTRATION_PERIOD:
+			period = ntohl(*(tlv->value));
+			isns_registration_set_period(period);
 			break;
 		case ISNS_ATTR_ISCSI_NAME:
 			if (vlen) {
@@ -968,7 +976,7 @@ int isns_registration_timer_init(void)
 {
 	registration_timer_fd = itimer_create();
 	if (registration_timer_fd != -1)
-		itimer_start(registration_timer_fd, DEFAULT_REGISTRATION_PERIOD - 10);
+		itimer_start(registration_timer_fd, registration_period - 10);
 	return registration_timer_fd;
 }
 
@@ -979,6 +987,17 @@ void isns_registration_refresh(void)
 	read(registration_timer_fd, &count, sizeof(count));
 	log_print(LOG_DEBUG, "refreshing registration");
 	isns_eid_attr_query();
+}
+
+static void isns_registration_set_period(uint32_t period)
+{
+	if (period == registration_period)
+		return;
+
+	registration_period = period;
+	log_print(LOG_DEBUG, "registration period is now %" PRIu32 " seconds",
+		  period);
+	itimer_start(registration_timer_fd, registration_period - 10);
 }
 
 int isns_init(char *addr)
