@@ -371,7 +371,7 @@ void configfs_show(void)
 	}
 }
 
-void configfs_handle_target(const struct inotify_event *event)
+static void configfs_handle_target(const struct inotify_event *event)
 {
 	struct target *tgt = target_find(event->name);
 
@@ -388,7 +388,7 @@ void configfs_handle_target(const struct inotify_event *event)
 	}
 }
 
-void configfs_handle_tpg(const struct inotify_event *event)
+static void configfs_handle_tpg(const struct inotify_event *event)
 {
 	struct target *tgt;
 	struct tpg *tpg = NULL, *t;
@@ -420,7 +420,7 @@ found:
 	}
 }
 
-void configfs_handle_portal(const struct inotify_event *event __attribute__ ((unused)))
+static void configfs_handle_portal(const struct inotify_event *event __attribute__ ((unused)))
 {
 	return;
 }
