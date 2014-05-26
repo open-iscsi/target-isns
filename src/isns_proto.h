@@ -187,6 +187,11 @@ const char *isns_function_get_abbr(uint16_t function);
 #define ISNS_ATTR_DD_FEATURES			2078
 #define ISNS_ATTR_DD_ID_NEXT_ID			2079
 
+/* Entity protocols (6.2.2) */
+#define ISNS_ENTITY_PROTOCOL_NO			1
+#define ISNS_ENTITY_PROTOCOL_ISCSI		2
+#define ISNS_ENTITY_PROTOCOL_FCP		3
+
 /* SCN flags (6.4.4) */
 #define ISNS_SCN_FLAG_INITIATOR			(1U << 24)
 #define ISNS_SCN_FLAG_TARGET			(1U << 25)

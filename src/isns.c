@@ -406,7 +406,7 @@ int isns_target_register(char *name)
 	struct isns_tlv *tlv;
 	uint32_t port = htonl(3260); /* FIXME: */
 	uint32_t node = htonl(ISNS_NODE_TARGET);
-	uint32_t type = htonl(2);
+	uint32_t protocol = htonl(ISNS_ENTITY_PROTOCOL_ISCSI);
 	uint32_t period = htonl(DEFAULT_REGISTRATION_PERIOD);
 	int err;
 	bool first_registration = source_attribute[0] == '\0';
@@ -434,7 +434,7 @@ int isns_target_register(char *name)
 		length += isns_tlv_set(&tlv, ISNS_ATTR_REGISTRATION_PERIOD,
 				       sizeof(period), &period);
 		length += isns_tlv_set(&tlv, ISNS_ATTR_ENTITY_PROTOCOL,
-				       sizeof(type), &type);
+				       sizeof(protocol), &protocol);
 		length += isns_tlv_set(&tlv, ISNS_ATTR_PORTAL_IP_ADDRESS,
 				       sizeof(ip), &ip);
 		length += isns_tlv_set(&tlv, ISNS_ATTR_PORTAL_PORT,
