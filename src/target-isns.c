@@ -114,7 +114,6 @@ int main(int argc, char *argv[])
 	struct epoll_event events[1];
 	ssize_t nr_events;
 	struct signalfd_siginfo siginfo;
-	int timeout;
 	bool daemon = true;
 
 	conffile_read();
@@ -204,7 +203,7 @@ int main(int argc, char *argv[])
 			else if (events[i].data.fd == epoll_set[EPOLL_REGISTRATION_TIMER])
 				isns_registration_refresh();
 			else if (events[i].data.fd == epoll_set[EPOLL_ISNS])
-				isns_handle(false, &timeout);
+				isns_handle();
 			else if (events[i].data.fd == epoll_set[EPOLL_SCN_LISTEN])
 				isns_scn_handle(true);
 			else if (events[i].data.fd == epoll_set[EPOLL_SCN])

@@ -8,7 +8,7 @@
 #ifndef __ISNS_H__
 #define __ISNS_H__
 
-int isns_handle(bool is_timeout, int *timeout);
+int isns_handle(void);
 
 int isns_scn_handle(bool is_accept);
 

@@ -59,7 +59,6 @@ static int registration_timer_fd = -1;
 static struct isns_io isns_rx, scn_rx;
 static char *rxbuf;
 static uint16_t transaction;
-static uint32_t current_timeout = 30; /* seconds */
 static uint32_t registration_period = DEFAULT_REGISTRATION_PERIOD;
 static char eid[ISCSI_NAME_LEN];
 static uint8_t ip[16]; /* IET supports only one portal */
@@ -768,16 +767,13 @@ free_query:
 	free(query);
 }
 
-int isns_handle(bool is_timeout, int *timeout __attribute__ ((unused)))
+int isns_handle(void)
 {
 	int err;
 	struct isns_io *rx = &isns_rx;
 	struct isns_hdr *hdr = (struct isns_hdr *) rx->buf;
 	uint16_t function;
 	char *name = NULL;
-
-	if (is_timeout)
-		return isns_attr_query(NULL);
 
 	err = recv_pdu(isns_fd, rx, hdr);
 	if (err) {
@@ -1025,7 +1021,7 @@ int isns_init(char *addr)
 	scn_rx.buf = rxbuf + BUFSIZE;
 	scn_rx.offset = 0;
 
-	return current_timeout * 1000;
+	return 0;
 }
 
 void isns_exit(void)
