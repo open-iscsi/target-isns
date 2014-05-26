@@ -6,6 +6,7 @@
  */
 
 #define _POSIX_C_SOURCE 1
+#include <ccan/array_size/array_size.h>
 #include <ccan/daemonize/daemonize.h>
 #include <ccan/str/str.h>
 #include <getopt.h>
@@ -50,22 +51,25 @@ static void print_usage(void)
 	       "  -h, --help         Print this message.\n");
 }
 
-static void epoll_add_fd(int epoll_id, int fd)
+static void epoll_init_fds(void)
+{
+	for (size_t i = 0; i < ARRAY_SIZE(epoll_set); i++)
+		epoll_set[i] = -1;
+}
+
+static void epoll_set_fd(int epoll_id, int fd)
 {
 	int old_fd = epoll_set[epoll_id];
 
 	if (fd == old_fd)
 		return;
 
-	if (old_fd != 0) {
+	if (old_fd != -1) {
 		epoll_ctl(epoll_fd, EPOLL_CTL_DEL, old_fd, NULL);
-		close(fd);
+		close(old_fd);
 	}
 
-	if (fd == 0) {
-		epoll_ctl(epoll_fd, EPOLL_CTL_DEL, fd, NULL);
-		close(fd);
-	} else {
+	if (fd != -1) {
 		struct epoll_event *ev = &epoll_events[epoll_id];
 		ev->events = EPOLLIN;
 		ev->data.fd = fd;
@@ -76,9 +80,9 @@ static void epoll_add_fd(int epoll_id, int fd)
 
 void isns_set_fd(int isns, int scn_listen, int scn)
 {
-	epoll_add_fd(EPOLL_ISNS, isns);
-	epoll_add_fd(EPOLL_SCN_LISTEN, scn_listen);
-	epoll_add_fd(EPOLL_SCN, scn);
+	epoll_set_fd(EPOLL_ISNS, isns);
+	epoll_set_fd(EPOLL_SCN_LISTEN, scn_listen);
+	epoll_set_fd(EPOLL_SCN, scn);
 }
 
 static int signal_init(void)
@@ -106,7 +110,7 @@ int main(int argc, char *argv[])
         };
 	int option;
 	int longindex = 0;
-	int ifd = 0, sfd = 0, tfd = 0;
+	int ifd = -1, sfd = -1, tfd = -1;
 	struct epoll_event events[1];
 	ssize_t nr_events;
 	struct signalfd_siginfo siginfo;
@@ -161,6 +165,7 @@ int main(int argc, char *argv[])
 	log_init(PROGNAME, daemon, config.log_level);
 	log_print(LOG_INFO, PROGNAME " version " VERSION " has been started");
 
+	epoll_init_fds();
 	isns_init(config.isns_server);
 
 	if ((epoll_fd = epoll_create(1)) == -1) {
@@ -172,19 +177,19 @@ int main(int argc, char *argv[])
 		log_print(LOG_ERR, "failed to create inotify instance");
 		goto quit;
 	}
-	epoll_add_fd(EPOLL_INOTIFY, ifd);
+	epoll_set_fd(EPOLL_INOTIFY, ifd);
 
 	if ((tfd = isns_registration_timer_init()) == -1) {
 		log_print(LOG_ERR, "failed to create timerfd instance");
 		goto quit;
 	}
-	epoll_add_fd(EPOLL_REGISTRATION_TIMER, tfd);
+	epoll_set_fd(EPOLL_REGISTRATION_TIMER, tfd);
 
 	if ((sfd = signal_init()) == -1) {
 		log_print(LOG_ERR, "failed to create signalfd instance");
 		goto quit;
 	}
-	epoll_add_fd(EPOLL_SIGNAL, sfd);
+	epoll_set_fd(EPOLL_SIGNAL, sfd);
 
 	while (true) {
 		nr_events = epoll_wait(epoll_fd, events, 1, -1);

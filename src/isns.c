@@ -52,7 +52,10 @@ struct isns_query {
 
 static LIST_HEAD(query_list);
 static uint16_t scn_listen_port;
-static int isns_fd, scn_listen_fd, scn_fd, registration_timer_fd;
+static int isns_fd = -1;
+static int scn_listen_fd = -1;
+static int scn_fd = -1;
+static int registration_timer_fd = -1;
 static struct isns_io isns_rx, scn_rx;
 static char *rxbuf;
 static uint16_t transaction;
@@ -190,9 +193,8 @@ static int isns_scn_deregister(char *name)
 	struct isns_hdr *hdr = (struct isns_hdr *) buf;
 	struct isns_tlv *tlv;
 
-	if (!isns_fd)
-		if (isns_connect() < 0)
-			return 0;
+	if (isns_fd == -1 && isns_connect() < 0)
+		return 0;
 
 	memset(buf, 0, sizeof(buf));
 	tlv = (struct isns_tlv *) hdr->pdu;
@@ -237,9 +239,8 @@ static int isns_scn_register(void)
 	if (list_empty(&targets))
 		return 0;
 
-	if (!isns_fd)
-		if (isns_connect() < 0)
-			return 0;
+	if (isns_fd == -1 && isns_connect() < 0)
+		return 0;
 
 	memset(buf, 0, sizeof(buf));
 	tlv = (struct isns_tlv *) hdr->pdu;
@@ -280,9 +281,8 @@ static int isns_eid_attr_query(void)
 	if (list_empty(&targets))
 		return 0;
 
-	if (!isns_fd)
-		if (isns_connect() < 0)
-			return 0;
+	if (isns_fd == -1 && isns_connect() < 0)
+		return 0;
 
 	query = malloc(sizeof(*query));
 	if (!query)
@@ -325,9 +325,8 @@ static int isns_attr_query(char *name)
 	if (list_empty(&targets))
 		return 0;
 
-	if (!isns_fd)
-		if (isns_connect() < 0)
-			return 0;
+	if (isns_fd == -1 && isns_connect() < 0)
+		return 0;
 
 	query = malloc(sizeof(struct isns_query));
 	if (query == NULL)
@@ -377,9 +376,8 @@ static int isns_deregister(void)
 	if (list_empty(&targets))
 		return 0;
 
-	if (!isns_fd)
-		if (isns_connect() < 0)
-			return 0;
+	if (isns_fd == -1 && isns_connect() < 0)
+		return 0;
 
 	memset(buf, 0, sizeof(buf));
 	tlv = (struct isns_tlv *) hdr->pdu;
@@ -413,9 +411,8 @@ int isns_target_register(char *name)
 	int err;
 	bool first_registration = source_attribute[0] == '\0';
 
-	if (!isns_fd)
-		if (isns_connect() < 0)
-			return 0;
+	if (isns_fd == -1 && isns_connect() < 0)
+		return 0;
 
 	if (first_registration) {
 		strncpy(source_attribute, name, ISCSI_NAME_LEN);
@@ -484,9 +481,8 @@ int isns_target_deregister(char *name)
 	bool last;
 	struct target *target;
 
-	if (!isns_fd)
-		if (isns_connect() < 0)
-			return 0;
+	if (isns_fd == -1 && isns_connect() < 0)
+		return 0;
 
 	target = list_tail(&targets, struct target, list);
 	last = streq(target->name, name);
@@ -789,9 +785,8 @@ int isns_handle(bool is_timeout, int *timeout __attribute__ ((unused)))
 			return err;
 		log_print(LOG_DEBUG, "%s %d: close connection %d", __func__, __LINE__,
 			  isns_fd);
-		close(isns_fd);
-		isns_fd = 0;
-		isns_set_fd(0, scn_listen_fd, scn_fd);
+		isns_set_fd(-1, scn_listen_fd, scn_fd);
+		isns_fd = -1;
 		return err;
 	}
 
@@ -890,9 +885,8 @@ int isns_scn_handle(bool is_accept)
 			return err;
 		log_print(LOG_DEBUG, "%s %d: close connection %d", __func__, __LINE__,
 			  scn_fd);
-		close(scn_fd);
-		scn_fd = 0;
-		isns_set_fd(isns_fd, scn_listen_fd, 0);
+		isns_set_fd(isns_fd, scn_listen_fd, -1);
+		scn_fd = -1;
 		return err;
 	}
 
@@ -1045,14 +1039,7 @@ void isns_exit(void)
 
 	isns_deregister();
 	/* we can't receive events any more. */
-	isns_set_fd(0, 0, 0);
-
-	if (isns_fd)
-		close(isns_fd);
-	if (scn_listen_fd)
-		close(scn_listen_fd);
-	if (scn_fd)
-		close(scn_fd);
+	isns_set_fd(-1, -1, -1);
 
 	free(rxbuf);
 }
