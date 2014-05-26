@@ -163,7 +163,7 @@ int main(int argc, char *argv[])
 	}
 
 	log_init(PROGNAME, daemon, config.log_level);
-	log_print(LOG_INFO, PROGNAME " version " VERSION " has been started");
+	log_print(LOG_INFO, PROGNAME " version " VERSION " started");
 
 	epoll_init_fds();
 	isns_init(config.isns_server);
@@ -220,7 +220,7 @@ quit:
 	close(tfd);
 	close(ifd);
 	close(epoll_fd);
-	log_print(LOG_INFO, PROGNAME " has been stopped");
+	log_print(LOG_INFO, PROGNAME " stopped");
 	log_close();
 	if (daemon)
 		pidfile_remove();

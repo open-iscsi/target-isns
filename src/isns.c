@@ -130,7 +130,7 @@ static int isns_connect(void)
 		return -1;
 	}
 
-	log_print(LOG_INFO, "iSNS connection opened");
+	log_print(LOG_DEBUG, "iSNS connection opened (fd = %d)", fd);
 
 	if (!strlen(eid)) {
 		err = isns_get_ip(fd);
@@ -783,8 +783,7 @@ int isns_handle(bool is_timeout, int *timeout __attribute__ ((unused)))
 	if (err) {
 		if (err == -EAGAIN)
 			return err;
-		log_print(LOG_DEBUG, "%s %d: close connection %d", __func__, __LINE__,
-			  isns_fd);
+		log_print(LOG_DEBUG, "iSNS connection closed (fd = %d)", isns_fd);
 		isns_set_fd(-1, scn_listen_fd, scn_fd);
 		isns_fd = -1;
 		return err;
