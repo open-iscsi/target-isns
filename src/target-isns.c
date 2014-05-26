@@ -92,6 +92,7 @@ static int signal_init(void)
 	sigemptyset(&mask);
 	sigaddset(&mask, SIGINT);
 	sigaddset(&mask, SIGQUIT);
+	sigaddset(&mask, SIGTERM);
 	sigprocmask(SIG_BLOCK, &mask, NULL);
 
 	return signalfd(-1, &mask, 0);
@@ -196,7 +197,9 @@ int main(int argc, char *argv[])
 		for (int i = 0; i < nr_events; i++) {
 			if (events[i].data.fd == epoll_set[EPOLL_SIGNAL]) {
 				read(sfd, &siginfo, sizeof(siginfo));
-				if (siginfo.ssi_signo == SIGQUIT || siginfo.ssi_signo == SIGINT)
+				if (siginfo.ssi_signo == SIGINT ||
+				    siginfo.ssi_signo == SIGQUIT ||
+				    siginfo.ssi_signo == SIGTERM)
 					goto quit;
 			} else if (events[i].data.fd == epoll_set[EPOLL_INOTIFY])
 				configfs_handle_events();
