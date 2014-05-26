@@ -662,7 +662,7 @@ static void qry_rsp_handle(struct isns_hdr *hdr)
 	struct isns_tlv *tlv;
 	uint16_t length = ntohs(hdr->length);
 	uint16_t transaction = ntohs(hdr->transaction);
-	uint32_t status = (uint32_t) (*hdr->pdu);
+	uint32_t status = ntohl(hdr->pdu[0]);
 	struct isns_query *query, *query_next;
 	char *name = NULL;
 	uint32_t period;
@@ -681,10 +681,8 @@ static void qry_rsp_handle(struct isns_hdr *hdr)
 found:
 
 	if (status) {
-
-		log_print(LOG_ERR, "%s %d: error response %u",
-			  __func__, __LINE__, status);
-
+		log_print(LOG_ERR, "error in response (status = %" PRIu32 ")",
+			  status);
 		goto free_query;
 	}
 
