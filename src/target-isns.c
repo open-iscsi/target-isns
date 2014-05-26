@@ -93,6 +93,7 @@ static int signal_init(void)
 	sigaddset(&mask, SIGINT);
 	sigaddset(&mask, SIGQUIT);
 	sigaddset(&mask, SIGTERM);
+	sigaddset(&mask, SIGUSR1);
 	sigprocmask(SIG_BLOCK, &mask, NULL);
 
 	return signalfd(-1, &mask, 0);
@@ -201,6 +202,8 @@ int main(int argc, char *argv[])
 				    siginfo.ssi_signo == SIGQUIT ||
 				    siginfo.ssi_signo == SIGTERM)
 					goto quit;
+				else if (siginfo.ssi_signo == SIGUSR1)
+					configfs_show();
 			} else if (events[i].data.fd == epoll_set[EPOLL_INOTIFY])
 				configfs_handle_events();
 			else if (events[i].data.fd == epoll_set[EPOLL_REGISTRATION_TIMER])

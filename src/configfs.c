@@ -364,8 +364,8 @@ void configfs_show(void)
 				  tpg->id, tpg->enabled);
 			list_for_each(&tpg->portals, portal, list) {
 				inet_ntop(portal->domain, portal->ip_addr, str, INET6_ADDRSTRLEN);
-				log_print(LOG_DEBUG, "    portal: domain = %d, ip_addr = %s, port = %d",
-					  portal->domain, str, portal->port);
+				log_print(LOG_DEBUG, "    portal: domain = IP%s, ip_addr = %s, port = %d",
+					  portal->domain == AF_INET ? "v4" : "v6", str, portal->port);
 			}
 		}
 	}
