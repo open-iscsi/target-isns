@@ -85,6 +85,17 @@ bool configfs_iscsi_path_exists(void)
 	return false;
 }
 
+static struct target *target_find_by_watch(int watch_fd)
+{
+	struct target *tgt;
+
+	list_for_each(&targets, tgt, list) {
+		if (tgt->watch_fd == watch_fd)
+			return tgt;
+	}
+	return NULL;
+}
+
 static struct target *configfs_target_init(const char *name)
 {
 	struct target *tgt;
@@ -397,17 +408,17 @@ static void configfs_handle_tpg(const struct inotify_event *event)
 	if (sscanf(event->name, "tpgt_%" PRIu32, &tpg_id) != 1)
 		return;
 
-	list_for_each(&targets, tgt, list) {
-		list_for_each(&tgt->tpgs, t, list) {
-			if (t->id == tpg_id) {
-				tpg = t;
-				goto found;
-			}
+	tgt = target_find_by_watch(event->wd);
+	if (tgt == NULL)
+		return;
+
+	list_for_each(&tgt->tpgs, t, list) {
+		if (t->id == tpg_id) {
+			tpg = t;
+			break;
 		}
 	}
-	if (tpg == NULL)
-		return;
-found:
+
 	if ((event->mask & IN_CREATE) && tpg == NULL) {
 		tpg = configfs_tpg_init(tgt, tpg_id);
 		configfs_tpg_update(tgt, tpg);
