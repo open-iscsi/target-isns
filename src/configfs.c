@@ -63,6 +63,7 @@ struct tpg {
 	struct list_head portals;
 	bool updated;
 	int watch_fd;
+	int np_watch_fd;
 };
 
 struct portal {
@@ -102,6 +103,18 @@ static struct tpg *tpg_find_by_tag(struct target *tgt, uint32_t tpg_tag)
 
 	list_for_each(&tgt->tpgs, tpg, list) {
 		if (tpg->tag == tpg_tag)
+			return tpg;
+	}
+	return NULL;
+}
+
+static struct tpg *tpg_find_by_watch(struct target *tgt, int watch_fd)
+{
+	struct tpg *tpg;
+
+	list_for_each(&tgt->tpgs, tpg, list) {
+		if (tpg->watch_fd == watch_fd ||
+		    tpg->np_watch_fd == watch_fd)
 			return tpg;
 	}
 	return NULL;
@@ -149,14 +162,17 @@ static struct tpg *configfs_tpg_init(struct target *tgt, uint32_t tpg_tag)
 {
 	struct tpg *tpg = malloc(sizeof(struct tpg));
 	char path[512];
+	char np_path[512];
 
 	snprintf(path, sizeof(path),
 		 CONFIGFS_ISCSI_PATH "/%s/tpgt_%" PRIu32,
 		 tgt->name, tpg_tag);
+	snprintf(np_path, sizeof(np_path), "%s/np", path);
+	tpg->watch_fd = inotify_add_watch(inotify_fd, path, INOTIFY_MASK);
+	tpg->np_watch_fd = inotify_add_watch(inotify_fd, np_path, INOTIFY_MASK);
 	tpg->tag = tpg_tag;
 	tpg->enabled = configfs_tpg_enabled(tgt, tpg_tag);
 	tpg->updated = false;
-	tpg->watch_fd = inotify_add_watch(inotify_fd, path, INOTIFY_MASK);
 	list_head_init(&tpg->portals);
 	list_add(&tgt->tpgs, &tpg->list);
 
@@ -208,6 +224,8 @@ static int configfs_tpg_update(struct target *tgt, struct tpg *tpg)
 	np_dir = opendir(np_path);
 	if (np_dir == NULL)
 		return -ENOENT;
+
+	tpg->enabled = configfs_tpg_enabled(tgt, tpg->tag);
 
 	list_for_each(&tpg->portals, portal, list) {
 		portal->updated = false;
@@ -356,6 +374,7 @@ void configfs_cleanup(void)
 			}
 			list_del(&tpg->list);
 			inotify_rm_watch(inotify_fd, tpg->watch_fd);
+			inotify_rm_watch(inotify_fd, tpg->np_watch_fd);
 			free(tpg);
 		}
 		isns_target_deregister(tgt->name);
@@ -447,9 +466,22 @@ static void configfs_handle_tpg(const struct inotify_event *event)
 		  inotify_event_str(event), tgt->name, tpg_tag);
 }
 
-static void configfs_handle_portal(const struct inotify_event *event __attribute__ ((unused)))
+static void configfs_handle_tpg_subtree(const struct inotify_event *event)
 {
-	return;
+	struct target *tgt;
+	struct tpg *tpg = NULL;
+
+	list_for_each(&targets, tgt, list) {
+		tpg = tpg_find_by_watch(tgt, event->wd);
+		if (tpg)
+			break;
+	}
+	if (tpg == NULL)
+		return;
+
+	configfs_tpg_update(tgt, tpg);
+	log_print(LOG_DEBUG, "inotify[%c] %s/tpg%" PRIu32 "/%s",
+		  inotify_event_str(event), tgt->name, tpg->tag, event->name);
 }
 
 void configfs_handle_events(void)
@@ -458,17 +490,33 @@ void configfs_handle_events(void)
 	char buf[INOTIFY_BUF_LEN];
 	struct inotify_event *event;
 	char *p;
+	int domain;
+	char ip_addr[sizeof(struct in6_addr)];
+	int port;
 
 	nr = read(inotify_fd, buf, INOTIFY_BUF_LEN);
 	for (p = buf; p < buf + nr; ) {
 		event = (struct inotify_event*) p;
 		p += sizeof(struct inotify_event) + event->len;
-		if (strstarts(event->name, "iqn."))
+
+		if (event->name[0] == '\0' ||
+		    streq(event->name, "acls") ||
+		    streq(event->name, "attrib") ||
+		    streq(event->name, "auth") ||
+		    streq(event->name, "lun") ||
+		    streq(event->name, "np") ||
+		    streq(event->name, "param"))
+			; /* Discard this event */
+		else if (strstarts(event->name, "iqn."))
 			configfs_handle_target(event);
 		else if (strstarts(event->name, "tpgt_"))
 			configfs_handle_tpg(event);
-		else if (streq(event->name, "np"))
-			configfs_handle_portal(event);
+		else if (streq(event->name, "enable") ||
+			 get_portal(event->name, &domain, ip_addr, &port) == 0)
+			configfs_handle_tpg_subtree(event);
+		else
+			log_print(LOG_DEBUG, "inotify[%c] %s unsupported",
+				  inotify_event_str(event), event->name);
 	}
 }
 
