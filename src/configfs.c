@@ -387,6 +387,18 @@ void configfs_show(void)
 	}
 }
 
+static char inotify_event_str(const struct inotify_event *event)
+{
+	if (event->mask & IN_CREATE)
+		return 'C';
+	else if (event->mask & IN_DELETE)
+		return 'D';
+	else if (event->mask & IN_MODIFY)
+		return 'M';
+	else
+		return '?';
+}
+
 static void configfs_handle_target(const struct inotify_event *event)
 {
 	struct target *tgt = target_find(event->name);
@@ -402,6 +414,8 @@ static void configfs_handle_target(const struct inotify_event *event)
 	} else if ((event->mask & IN_MODIFY) && tgt) {
 		configfs_target_update(tgt);
 	}
+	log_print(LOG_DEBUG, "inotify[%c] %s",
+		  inotify_event_str(event), tgt->name);
 }
 
 static void configfs_handle_tpg(const struct inotify_event *event)
@@ -429,6 +443,8 @@ static void configfs_handle_tpg(const struct inotify_event *event)
 	} else if ((event->mask & IN_MODIFY) && tpg) {
 		configfs_tpg_update(tgt, tpg);
 	}
+	log_print(LOG_DEBUG, "inotify[%c] %s/tpg%" PRIu32,
+		  inotify_event_str(event), tgt->name, tpg_tag);
 }
 
 static void configfs_handle_portal(const struct inotify_event *event __attribute__ ((unused)))
