@@ -58,7 +58,7 @@ static int inotify_fd = -1;
 
 struct tpg {
 	struct list_node list;
-	uint32_t id;
+	uint32_t tag;
 	bool enabled;
 	struct list_head portals;
 	bool updated;
@@ -96,6 +96,17 @@ static struct target *target_find_by_watch(int watch_fd)
 	return NULL;
 }
 
+static struct tpg *tpg_find_by_tag(struct target *tgt, uint32_t tpg_tag)
+{
+	struct tpg *tpg;
+
+	list_for_each(&tgt->tpgs, tpg, list) {
+		if (tpg->tag == tpg_tag)
+			return tpg;
+	}
+	return NULL;
+}
+
 static struct target *configfs_target_init(const char *name)
 {
 	struct target *tgt;
@@ -114,7 +125,7 @@ static struct target *configfs_target_init(const char *name)
 	return tgt;
 }
 
-static bool configfs_tpg_enabled(struct target *tgt, uint32_t tpg_id)
+static bool configfs_tpg_enabled(struct target *tgt, uint32_t tpg_tag)
 {
 	int fd;
 	ssize_t nr;
@@ -123,7 +134,7 @@ static bool configfs_tpg_enabled(struct target *tgt, uint32_t tpg_id)
 
 	snprintf(path, sizeof(path),
 		 CONFIGFS_ISCSI_PATH "/%s/tpgt_%" PRIu32 "/enable",
-		 tgt->name, tpg_id);
+		 tgt->name, tpg_tag);
 	if ((fd = open(path, O_RDONLY)) == -1)
 		return false;
 	if ((nr = read(fd, buf, sizeof(buf))) != -1) {
@@ -134,16 +145,16 @@ static bool configfs_tpg_enabled(struct target *tgt, uint32_t tpg_id)
 	return enabled;
 }
 
-static struct tpg *configfs_tpg_init(struct target *tgt, uint32_t tpg_id)
+static struct tpg *configfs_tpg_init(struct target *tgt, uint32_t tpg_tag)
 {
 	struct tpg *tpg = malloc(sizeof(struct tpg));
 	char path[512];
 
 	snprintf(path, sizeof(path),
 		 CONFIGFS_ISCSI_PATH "/%s/tpgt_%" PRIu32,
-		 tgt->name, tpg_id);
-	tpg->id = tpg_id;
-	tpg->enabled = configfs_tpg_enabled(tgt, tpg_id);
+		 tgt->name, tpg_tag);
+	tpg->tag = tpg_tag;
+	tpg->enabled = configfs_tpg_enabled(tgt, tpg_tag);
 	tpg->updated = false;
 	tpg->watch_fd = inotify_add_watch(inotify_fd, path, INOTIFY_MASK);
 	list_head_init(&tpg->portals);
@@ -193,7 +204,7 @@ static int configfs_tpg_update(struct target *tgt, struct tpg *tpg)
 
 	snprintf(np_path, sizeof(np_path),
 		 CONFIGFS_ISCSI_PATH "/%s/tpgt_%" PRIu32 "/np",
-		 tgt->name, tpg->id);
+		 tgt->name, tpg->tag);
 	np_dir = opendir(np_path);
 	if (np_dir == NULL)
 		return -ENOENT;
@@ -243,7 +254,7 @@ static int configfs_target_update(struct target *tgt)
 	DIR *tgt_dir;
 	struct dirent *dirent;
 	struct tpg *tpg, *tpg_next;
-	uint32_t tpg_id;
+	uint32_t tpg_tag;
 	char tgt_path[512];
 
 	snprintf(tgt_path, sizeof(tgt_path), CONFIGFS_ISCSI_PATH "/%s", tgt->name);
@@ -259,17 +270,11 @@ static int configfs_target_update(struct target *tgt)
 		if (!strstarts(dirent->d_name, "tpgt_"))
 			continue;
 
-		sscanf(dirent->d_name, "tpgt_%" PRIu32, &tpg_id);
-
-		struct tpg *p;
-		tpg = NULL;
-		list_for_each(&tgt->tpgs, p, list) {
-			if (p->id == tpg_id)
-				tpg = p;
-		}
+		sscanf(dirent->d_name, "tpgt_%" PRIu32, &tpg_tag);
+		tpg = tpg_find_by_tag(tgt, tpg_tag);
 
 		if (!tpg)
-			tpg = configfs_tpg_init(tgt, tpg_id);
+			tpg = configfs_tpg_init(tgt, tpg_tag);
 		configfs_tpg_update(tgt, tpg);
 	}
 	closedir(tgt_dir);
@@ -371,8 +376,8 @@ void configfs_show(void)
 	list_for_each(&targets, tgt, list) {
 		log_print(LOG_DEBUG, "target: name = %s", tgt->name);
 		list_for_each(&tgt->tpgs, tpg, list) {
-			log_print(LOG_DEBUG, "  tpg: id = %" PRIu32 ", enabled = %d",
-				  tpg->id, tpg->enabled);
+			log_print(LOG_DEBUG, "  tpg: tag = %" PRIu32 ", enabled = %d",
+				  tpg->tag, tpg->enabled);
 			list_for_each(&tpg->portals, portal, list) {
 				inet_ntop(portal->domain, portal->ip_addr, str, INET6_ADDRSTRLEN);
 				log_print(LOG_DEBUG, "    portal: domain = IP%s, ip_addr = %s, port = %d",
@@ -402,25 +407,20 @@ static void configfs_handle_target(const struct inotify_event *event)
 static void configfs_handle_tpg(const struct inotify_event *event)
 {
 	struct target *tgt;
-	struct tpg *tpg = NULL, *t;
-	uint32_t tpg_id;
+	struct tpg *tpg = NULL;
+	uint32_t tpg_tag;
 
-	if (sscanf(event->name, "tpgt_%" PRIu32, &tpg_id) != 1)
+	if (sscanf(event->name, "tpgt_%" PRIu32, &tpg_tag) != 1)
 		return;
 
 	tgt = target_find_by_watch(event->wd);
 	if (tgt == NULL)
 		return;
 
-	list_for_each(&tgt->tpgs, t, list) {
-		if (t->id == tpg_id) {
-			tpg = t;
-			break;
-		}
-	}
+	tpg = tpg_find_by_tag(tgt, tpg_tag);
 
 	if ((event->mask & IN_CREATE) && tpg == NULL) {
-		tpg = configfs_tpg_init(tgt, tpg_id);
+		tpg = configfs_tpg_init(tgt, tpg_tag);
 		configfs_tpg_update(tgt, tpg);
 	} else if ((event->mask & IN_DELETE) && tpg) {
 		list_del(&tpg->list);
