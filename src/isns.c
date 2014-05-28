@@ -902,6 +902,12 @@ int isns_scn_handle(bool is_accept)
 	return 0;
 }
 
+
+/*
+ * FIXME: State Change Notification is currently disabled.
+ */
+#define SCN_ENABLED 0
+#if SCN_ENABLED
 static int scn_init(char *addr __attribute__ ((unused)))
 {
 	int fd, opt, err;
@@ -958,6 +964,7 @@ out:
 
 	return err;
 }
+#endif
 
 int isns_registration_timer_init(void)
 {
@@ -1012,7 +1019,9 @@ int isns_init(char *addr)
 		return -1;
 	}
 
+#if SCN_ENABLED
 	scn_init(addr);
+#endif
 
 	isns_rx.buf = rxbuf;
 	isns_rx.offset = 0;
