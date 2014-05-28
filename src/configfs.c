@@ -69,7 +69,7 @@ struct tpg {
 struct portal {
 	struct list_node list;
 	int domain;
-	unsigned char ip_addr[sizeof(struct in6_addr)];
+	uint8_t ip_addr[sizeof(struct in6_addr)];
 	int port;
 	bool updated;
 };
@@ -179,7 +179,7 @@ static struct tpg *configfs_tpg_init(struct target *tgt, uint32_t tpg_tag)
 	return tpg;
 }
 
-static int get_portal(const char *str, int *domain, char *ip_addr, int *port)
+static int get_portal(const char *str, int *domain, uint8_t *ip_addr, int *port)
 {
 	char *p = strrchr(str, ':');
 
@@ -198,7 +198,7 @@ static int get_portal(const char *str, int *domain, char *ip_addr, int *port)
 }
 
 static struct portal *configfs_portal_init(struct tpg *tpg, int domain,
-					   const char *ip_addr, int port)
+					   const uint8_t *ip_addr, int port)
 {
 	struct portal *portal = malloc(sizeof(struct portal));
 
@@ -236,7 +236,7 @@ static int configfs_tpg_update(struct target *tgt, struct tpg *tpg)
 			continue;
 
 		int domain;
-		char ip_addr[sizeof(struct in6_addr)];
+		uint8_t ip_addr[sizeof(struct in6_addr)];
 		int port;
 		if (get_portal(dirent->d_name, &domain, ip_addr, &port) != 0)
 			continue;
@@ -487,7 +487,7 @@ void configfs_handle_events(void)
 	struct inotify_event *event;
 	char *p;
 	int domain;
-	char ip_addr[sizeof(struct in6_addr)];
+	uint8_t ip_addr[sizeof(struct in6_addr)];
 	int port;
 
 	nr = read(inotify_fd, buf, INOTIFY_BUF_LEN);
