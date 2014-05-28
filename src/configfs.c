@@ -68,7 +68,7 @@ struct tpg {
 
 struct portal {
 	struct list_node list;
-	int domain;
+	int af;
 	uint8_t ip_addr[sizeof(struct in6_addr)];
 	int port;
 	bool updated;
@@ -179,7 +179,7 @@ static struct tpg *configfs_tpg_init(struct target *tgt, uint32_t tpg_tag)
 	return tpg;
 }
 
-static int get_portal(const char *str, int *domain, uint8_t *ip_addr, int *port)
+static int get_portal(const char *str, int *af, uint8_t *ip_addr, int *port)
 {
 	char *p = strrchr(str, ':');
 
@@ -190,19 +190,19 @@ static int get_portal(const char *str, int *domain, uint8_t *ip_addr, int *port)
 		return -EINVAL;
 
 	*p = '\0';
-	*domain = strchr(str, ':') ? AF_INET6 : AF_INET;
-	if (inet_pton(*domain, str, ip_addr) != 1)
+	*af = strchr(str, ':') ? AF_INET6 : AF_INET;
+	if (inet_pton(*af, str, ip_addr) != 1)
 		return -EINVAL;
 
 	return 0;
 }
 
-static struct portal *configfs_portal_init(struct tpg *tpg, int domain,
+static struct portal *configfs_portal_init(struct tpg *tpg, int af,
 					   const uint8_t *ip_addr, int port)
 {
 	struct portal *portal = malloc(sizeof(struct portal));
 
-	portal->domain = domain;
+	portal->af = af;
 	memcpy(portal->ip_addr, ip_addr, sizeof(struct in6_addr));
 	portal->port = port;
 	portal->updated = false;
@@ -235,10 +235,10 @@ static int configfs_tpg_update(struct target *tgt, struct tpg *tpg)
 		if (streq(dirent->d_name, ".") || streq(dirent->d_name, ".."))
 			continue;
 
-		int domain;
+		int af;
 		uint8_t ip_addr[sizeof(struct in6_addr)];
 		int port;
-		if (get_portal(dirent->d_name, &domain, ip_addr, &port) != 0)
+		if (get_portal(dirent->d_name, &af, ip_addr, &port) != 0)
 			continue;
 
 		struct portal *p;
@@ -250,7 +250,7 @@ static int configfs_tpg_update(struct target *tgt, struct tpg *tpg)
 		}
 
 		if (!portal)
-			portal = configfs_portal_init(tpg, domain, ip_addr, port);
+			portal = configfs_portal_init(tpg, af, ip_addr, port);
 		portal->updated = true;
 	}
 	closedir(np_dir);
@@ -398,9 +398,9 @@ void configfs_show(void)
 			log_print(LOG_DEBUG, "  tpg: tag = %" PRIu32 ", enabled = %d",
 				  tpg->tag, tpg->enabled);
 			list_for_each(&tpg->portals, portal, list) {
-				inet_ntop(portal->domain, portal->ip_addr, str, INET6_ADDRSTRLEN);
-				log_print(LOG_DEBUG, "    portal: domain = IP%s, ip_addr = %s, port = %d",
-					  portal->domain == AF_INET ? "v4" : "v6", str, portal->port);
+				inet_ntop(portal->af, portal->ip_addr, str, INET6_ADDRSTRLEN);
+				log_print(LOG_DEBUG, "    portal: af = IP%s, ip_addr = %s, port = %d",
+					  portal->af == AF_INET ? "v4" : "v6", str, portal->port);
 			}
 		}
 	}
@@ -486,7 +486,7 @@ void configfs_handle_events(void)
 	char buf[INOTIFY_BUF_LEN];
 	struct inotify_event *event;
 	char *p;
-	int domain;
+	int af;
 	uint8_t ip_addr[sizeof(struct in6_addr)];
 	int port;
 
@@ -508,7 +508,7 @@ void configfs_handle_events(void)
 		else if (strstarts(event->name, "tpgt_"))
 			configfs_handle_tpg(event);
 		else if (streq(event->name, "enable") ||
-			 get_portal(event->name, &domain, ip_addr, &port) == 0)
+			 get_portal(event->name, &af, ip_addr, &port) == 0)
 			configfs_handle_tpg_subtree(event);
 		else
 			log_print(LOG_DEBUG, "inotify[%c] %s unsupported",
