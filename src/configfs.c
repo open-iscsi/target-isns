@@ -430,8 +430,6 @@ static void configfs_handle_target(const struct inotify_event *event)
 		list_del(&tgt->list);
 		inotify_rm_watch(inotify_fd, tgt->watch_fd);
 		free(tgt);
-	} else if ((event->mask & IN_MODIFY) && tgt) {
-		configfs_target_update(tgt);
 	}
 	log_print(LOG_DEBUG, "inotify[%c] %s",
 		  inotify_event_str(event), tgt->name);
@@ -459,8 +457,6 @@ static void configfs_handle_tpg(const struct inotify_event *event)
 		list_del(&tpg->list);
 		inotify_rm_watch(inotify_fd, tpg->watch_fd);
 		free(tpg);
-	} else if ((event->mask & IN_MODIFY) && tpg) {
-		configfs_tpg_update(tgt, tpg);
 	}
 	log_print(LOG_DEBUG, "inotify[%c] %s/tpg%" PRIu32,
 		  inotify_event_str(event), tgt->name, tpg_tag);
