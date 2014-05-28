@@ -424,16 +424,17 @@ int isns_target_register(char *name)
 	memset(buf, 0, sizeof(buf));
 	tlv = (struct isns_tlv *) hdr->pdu;
 
-        length += isns_tlv_set_string(&tlv, ISNS_ATTR_ISCSI_NAME, source_attribute);
+	length += isns_tlv_set_string(&tlv, ISNS_ATTR_ISCSI_NAME, source_attribute);
 	length += isns_tlv_set_string(&tlv, ISNS_ATTR_ENTITY_IDENTIFIER, eid);
-
 	length += isns_tlv_set(&tlv, 0, 0, 0);
+
 	length += isns_tlv_set_string(&tlv, ISNS_ATTR_ENTITY_IDENTIFIER, eid);
+	length += isns_tlv_set(&tlv, ISNS_ATTR_ENTITY_PROTOCOL,
+			       sizeof(protocol), &protocol);
+	length += isns_tlv_set(&tlv, ISNS_ATTR_REGISTRATION_PERIOD,
+			       sizeof(period), &period);
+
 	if (first_registration) {
-		length += isns_tlv_set(&tlv, ISNS_ATTR_REGISTRATION_PERIOD,
-				       sizeof(period), &period);
-		length += isns_tlv_set(&tlv, ISNS_ATTR_ENTITY_PROTOCOL,
-				       sizeof(protocol), &protocol);
 		length += isns_tlv_set(&tlv, ISNS_ATTR_PORTAL_IP_ADDRESS,
 				       sizeof(ip), &ip);
 		length += isns_tlv_set(&tlv, ISNS_ATTR_PORTAL_PORT,
