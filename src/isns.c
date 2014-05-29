@@ -163,7 +163,7 @@ static void isns_hdr_init(struct isns_hdr *hdr, uint16_t function,
 }
 
 static int isns_tlv_set(struct isns_tlv **tlv, uint32_t tag, uint32_t length,
-			void *value)
+			const void *value)
 {
 	if (length)
 		memcpy((*tlv)->value, value, length);
@@ -179,7 +179,7 @@ static int isns_tlv_set(struct isns_tlv **tlv, uint32_t tag, uint32_t length,
 	return length;
 }
 
-static int isns_tlv_set_string(struct isns_tlv **tlv, uint32_t tag, char *str)
+static int isns_tlv_set_string(struct isns_tlv **tlv, uint32_t tag, const char *str)
 {
 	return isns_tlv_set(tlv, tag, strlen(str) + 1, str);
 }
