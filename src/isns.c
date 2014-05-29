@@ -184,6 +184,11 @@ static int isns_tlv_set_string(struct isns_tlv **tlv, uint32_t tag, const char *
 	return isns_tlv_set(tlv, tag, strlen(str) + 1, str);
 }
 
+/*
+ * FIXME: State Change Notification is currently disabled.
+ */
+#define SCN_ENABLED 0
+#if SCN_ENABLED
 static int isns_scn_deregister(char *name)
 {
 	int err;
@@ -211,6 +216,7 @@ static int isns_scn_deregister(char *name)
 
 	return 0;
 }
+#endif
 
 #if __BYTE_ORDER == __LITTLE_ENDIAN
 #define set_scn_flag(x)						\
@@ -363,40 +369,6 @@ static int isns_attr_query(char *name)
 	return 0;
 }
 
-static int isns_deregister(void)
-{
-	int err;
-	uint16_t flags, length = 0;
-	char buf[4096];
-	struct isns_hdr *hdr = (struct isns_hdr *) buf;
-	struct isns_tlv *tlv;
-	struct target *target;
-
-	if (list_empty(&targets))
-		return 0;
-
-	if (isns_fd == -1 && isns_connect() < 0)
-		return 0;
-
-	memset(buf, 0, sizeof(buf));
-	tlv = (struct isns_tlv *) hdr->pdu;
-
-	target = list_top(&targets, struct target, list);
-
-	length += isns_tlv_set_string(&tlv, ISNS_ATTR_ISCSI_NAME, target->name);
-	length += isns_tlv_set(&tlv, 0, 0, 0);
-	length += isns_tlv_set_string(&tlv, ISNS_ATTR_ENTITY_IDENTIFIER, eid);
-
-	flags = ISNS_FLAG_CLIENT | ISNS_FLAG_LAST_PDU | ISNS_FLAG_FIRST_PDU;
-	isns_hdr_init(hdr, ISNS_FUNC_DEV_DEREG, length, flags,
-		      ++transaction, 0);
-
-	err = write(isns_fd, buf, length + sizeof(struct isns_hdr));
-	if (err < 0)
-		log_print(LOG_ERR, "%s %d: %s", __func__, __LINE__, strerror(errno));
-	return 0;
-}
-
 int isns_target_register(const struct target *target)
 {
 	char buf[4096];
@@ -484,36 +456,37 @@ int isns_target_register(const struct target *target)
 	return 0;
 }
 
-int isns_target_deregister(char *name)
+int isns_target_deregister(const struct target *target)
 {
 	char buf[4096];
 	uint16_t flags, length = 0;
 	struct isns_hdr *hdr = (struct isns_hdr *) buf;
 	struct isns_tlv *tlv;
 	int err;
-	bool last;
-	struct target *target;
+	bool last = list_is_singular(&targets);
+	bool all_targets = target == ALL_TARGETS;
 
 	if (isns_fd == -1 && isns_connect() < 0)
 		return 0;
 
-	target = list_tail(&targets, struct target, list);
-	last = streq(target->name, name);
+	log_print(LOG_DEBUG, "deregistering target %s %s",
+		  all_targets ? "(all)" : target->name,
+		  last ? "(last)" : "");
 
-	log_print(LOG_DEBUG, "deregistering target %s %s", name, last ? "(last)" : "");
-
-	isns_scn_deregister(name);
+#if SCN_ENABLED
+	isns_scn_deregister(target->name);
+#endif
 
 	memset(buf, 0, sizeof(buf));
 	tlv = (struct isns_tlv *) hdr->pdu;
 
-	length += isns_tlv_set_string(&tlv, ISNS_ATTR_ISCSI_NAME, name);
+	length += isns_tlv_set_string(&tlv, ISNS_ATTR_ISCSI_NAME, source_attribute);
 	length += isns_tlv_set(&tlv, 0, 0, 0);
-	if (last)
-		length += isns_tlv_set_string(&tlv, ISNS_ATTR_ENTITY_IDENTIFIER,
-					      eid);
+
+	if (last || all_targets)
+		length += isns_tlv_set_string(&tlv, ISNS_ATTR_ENTITY_IDENTIFIER, eid);
 	else
-		length += isns_tlv_set_string(&tlv, ISNS_ATTR_ISCSI_NAME, name);
+		length += isns_tlv_set_string(&tlv, ISNS_ATTR_ISCSI_NAME, target->name);
 
 	flags = ISNS_FLAG_CLIENT | ISNS_FLAG_LAST_PDU | ISNS_FLAG_FIRST_PDU;
 	isns_hdr_init(hdr, ISNS_FUNC_DEV_DEREG, length, flags,
@@ -523,7 +496,7 @@ int isns_target_deregister(char *name)
 	if (err < 0)
 		log_print(LOG_ERR, "%s %d: %s", __func__, __LINE__, strerror(errno));
 
-	if (last)
+	if (last || all_targets)
 		memset(source_attribute, 0, ISCSI_NAME_LEN);
 
 	return 0;
@@ -916,11 +889,6 @@ int isns_scn_handle(bool is_accept)
 	return 0;
 }
 
-
-/*
- * FIXME: State Change Notification is currently disabled.
- */
-#define SCN_ENABLED 0
 #if SCN_ENABLED
 static int scn_init(char *addr __attribute__ ((unused)))
 {
@@ -1050,16 +1018,14 @@ void isns_start(void)
 	isns_target_register(ALL_TARGETS);
 }
 
+void isns_stop(void)
+{
+	isns_target_deregister(ALL_TARGETS);
+}
+
 void isns_exit(void)
 {
-	struct target *target;
-
-	list_for_each(&targets, target, list) {
-		isns_scn_deregister(target->name);
-	}
-
-	isns_deregister();
-	/* we can't receive events any more. */
+	/* We can't receive events any more. */
 	isns_set_fd(-1, -1, -1);
 
 	free(rxbuf);

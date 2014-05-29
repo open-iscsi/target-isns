@@ -222,8 +222,9 @@ int main(int argc, char *argv[])
 	}
 
 quit:
-	configfs_cleanup();
+	isns_stop();
 	sleep(1);
+	configfs_cleanup();
 	isns_exit();
 	close(sfd);
 	close(tfd);

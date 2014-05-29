@@ -375,7 +375,6 @@ void configfs_cleanup(void)
 			inotify_rm_watch(inotify_fd, tpg->np_watch_fd);
 			free(tpg);
 		}
-		isns_target_deregister(tgt->name);
 		list_del(&tgt->list);
 		inotify_rm_watch(inotify_fd, tgt->watch_fd);
 		free(tgt);
@@ -425,7 +424,7 @@ static void configfs_handle_target(const struct inotify_event *event)
 		configfs_target_update(tgt);
 		isns_target_register(tgt);
 	} else if ((event->mask & IN_DELETE) && tgt) {
-		isns_target_deregister(tgt->name);
+		isns_target_deregister(tgt);
 		list_del(&tgt->list);
 		inotify_rm_watch(inotify_fd, tgt->watch_fd);
 		free(tgt);
