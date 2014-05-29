@@ -167,7 +167,10 @@ int main(int argc, char *argv[])
 	log_print(LOG_INFO, PROGNAME " version " VERSION " started");
 
 	epoll_init_fds();
-	isns_init(config.isns_server);
+	if (isns_init(config.isns_server) == -1) {
+		log_print(LOG_ERR, "failed to initialize iSNS client");
+		goto quit;
+	}
 
 	if ((epoll_fd = epoll_create(1)) == -1) {
 		log_print(LOG_ERR, "failed to create epoll instance");
@@ -192,6 +195,7 @@ int main(int argc, char *argv[])
 	}
 	epoll_set_fd(EPOLL_SIGNAL, sfd);
 
+	isns_start();
 	while (true) {
 		nr_events = epoll_wait(epoll_fd, events, 1, -1);
 

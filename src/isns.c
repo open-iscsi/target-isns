@@ -397,28 +397,37 @@ static int isns_deregister(void)
 	return 0;
 }
 
-int isns_target_register(char *name)
+int isns_target_register(const struct target *target)
 {
 	char buf[4096];
 	uint16_t flags = 0, length = 0;
 	struct isns_hdr *hdr = (struct isns_hdr *) buf;
 	struct isns_tlv *tlv;
+	struct target *tgt;
 	uint32_t port = htonl(3260); /* FIXME: */
 	uint32_t node = htonl(ISNS_NODE_TARGET);
 	uint32_t protocol = htonl(ISNS_ENTITY_PROTOCOL_ISCSI);
 	uint32_t period = htonl(DEFAULT_REGISTRATION_PERIOD);
 	int err;
 	bool first_registration = source_attribute[0] == '\0';
+	bool all_targets = target == ALL_TARGETS;
+
+	if (all_targets) {
+		if (list_empty(&targets))
+			return 0;
+		target = list_top(&targets, struct target, list);
+	}
 
 	if (isns_fd == -1 && isns_connect() < 0)
 		return 0;
 
 	if (first_registration) {
-		strncpy(source_attribute, name, ISCSI_NAME_LEN);
+		strncpy(source_attribute, target->name, ISCSI_NAME_LEN);
 		source_attribute[ISCSI_NAME_LEN - 1] = '\0';
 	}
 
-	log_print(LOG_DEBUG, "registering target %s %s", name,
+	log_print(LOG_DEBUG, "registering target %s %s",
+		  all_targets ? "(all)" : target->name,
 		  first_registration ? "(first)" : "");
 
 	memset(buf, 0, sizeof(buf));
@@ -448,9 +457,15 @@ int isns_target_register(char *name)
 		}
 	}
 
-	length += isns_tlv_set_string(&tlv, ISNS_ATTR_ISCSI_NAME, name);
-	length += isns_tlv_set(&tlv, ISNS_ATTR_ISCSI_NODE_TYPE,
-			       sizeof(node), &node);
+	list_for_each(&targets, tgt, list) {
+		if (tgt != target && !all_targets)
+			continue;
+
+		length += isns_tlv_set_string(&tlv, ISNS_ATTR_ISCSI_NAME,
+					      tgt->name);
+		length += isns_tlv_set(&tlv, ISNS_ATTR_ISCSI_NODE_TYPE,
+				       sizeof(node), &node);
+	}
 
 	flags |= ISNS_FLAG_CLIENT | ISNS_FLAG_LAST_PDU | ISNS_FLAG_FIRST_PDU;
 	isns_hdr_init(hdr, ISNS_FUNC_DEV_ATTR_REG, length, flags,
@@ -465,8 +480,6 @@ int isns_target_register(char *name)
 
 	if (first_registration)
 		isns_eid_attr_query();
-
-	isns_attr_query(name);
 
 	return 0;
 }
@@ -1030,6 +1043,11 @@ int isns_init(char *addr)
 	scn_rx.offset = 0;
 
 	return 0;
+}
+
+void isns_start(void)
+{
+	isns_target_register(ALL_TARGETS);
 }
 
 void isns_exit(void)

@@ -306,8 +306,6 @@ static int configfs_target_update(struct target *tgt)
 	}
 	tgt->updated = true;
 
-	isns_target_register(tgt->name);
-
 	return 0;
 }
 
@@ -425,6 +423,7 @@ static void configfs_handle_target(const struct inotify_event *event)
 	if ((event->mask & IN_CREATE) && tgt == NULL) {
 		tgt = configfs_target_init(event->name);
 		configfs_target_update(tgt);
+		isns_target_register(tgt);
 	} else if ((event->mask & IN_DELETE) && tgt) {
 		isns_target_deregister(tgt->name);
 		list_del(&tgt->list);

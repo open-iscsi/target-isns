@@ -21,6 +21,8 @@ struct target {
 	int watch_fd;
 };
 
+#define ALL_TARGETS ((struct target*) 1)
+
 bool configfs_iscsi_path_exists(void);
 
 int configfs_init(void);

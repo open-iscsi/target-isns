@@ -14,9 +14,11 @@ int isns_scn_handle(bool is_accept);
 
 int isns_init(char *addr);
 
+void isns_start(void);
+
 void isns_exit(void);
 
-void isns_target_register(char *name);
+void isns_target_register(const struct target *target);
 
 void isns_target_deregister(char *name);
 
