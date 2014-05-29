@@ -205,6 +205,15 @@ static inline bool list_empty(const struct list_head *h)
 }
 
 /**
+ * list_is_singular - has a list one and only one entry?
+ * @h: the list_head
+ */
+static inline bool list_is_singular(const struct list_head *h)
+{
+	return !list_empty(h) && (h->n.next == h->n.prev);
+}
+
+/**
  * list_del - delete an entry from an (unknown) linked list.
  * @n: the list_node to delete from the list.
  *
