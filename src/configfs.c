@@ -58,7 +58,7 @@ static int inotify_fd = -1;
 
 struct tpg {
 	struct list_node list;
-	uint32_t tag;
+	uint16_t tag;
 	bool enabled;
 	struct list_head portals;
 	bool updated;
@@ -69,8 +69,8 @@ struct tpg {
 struct portal {
 	struct list_node list;
 	int af;
-	uint8_t ip_addr[sizeof(struct in6_addr)];
-	int port;
+	char ip_addr[INET6_ADDRSTRLEN];
+	uint16_t port;
 	bool updated;
 };
 
@@ -97,7 +97,7 @@ static struct target *target_find_by_watch(int watch_fd)
 	return NULL;
 }
 
-static struct tpg *tpg_find_by_tag(struct target *tgt, uint32_t tpg_tag)
+static struct tpg *tpg_find_by_tag(struct target *tgt, uint16_t tpg_tag)
 {
 	struct tpg *tpg;
 
@@ -138,7 +138,7 @@ static struct target *configfs_target_init(const char *name)
 	return tgt;
 }
 
-static bool configfs_tpg_enabled(struct target *tgt, uint32_t tpg_tag)
+static bool configfs_tpg_enabled(struct target *tgt, uint16_t tpg_tag)
 {
 	int fd;
 	ssize_t nr;
@@ -146,7 +146,7 @@ static bool configfs_tpg_enabled(struct target *tgt, uint32_t tpg_tag)
 	bool enabled = false;
 
 	snprintf(path, sizeof(path),
-		 CONFIGFS_ISCSI_PATH "/%s/tpgt_%" PRIu32 "/enable",
+		 CONFIGFS_ISCSI_PATH "/%s/tpgt_%hu/enable",
 		 tgt->name, tpg_tag);
 	if ((fd = open(path, O_RDONLY)) == -1)
 		return false;
@@ -158,14 +158,13 @@ static bool configfs_tpg_enabled(struct target *tgt, uint32_t tpg_tag)
 	return enabled;
 }
 
-static struct tpg *configfs_tpg_init(struct target *tgt, uint32_t tpg_tag)
+static struct tpg *configfs_tpg_init(struct target *tgt, uint16_t tpg_tag)
 {
 	struct tpg *tpg = malloc(sizeof(struct tpg));
 	char path[512];
 	char np_path[512];
 
-	snprintf(path, sizeof(path),
-		 CONFIGFS_ISCSI_PATH "/%s/tpgt_%" PRIu32,
+	snprintf(path, sizeof(path), CONFIGFS_ISCSI_PATH "/%s/tpgt_%hu",
 		 tgt->name, tpg_tag);
 	snprintf(np_path, sizeof(np_path), "%s/np", path);
 	tpg->watch_fd = inotify_add_watch(inotify_fd, path, INOTIFY_MASK);
@@ -179,31 +178,34 @@ static struct tpg *configfs_tpg_init(struct target *tgt, uint32_t tpg_tag)
 	return tpg;
 }
 
-static int get_portal(const char *str, int *af, uint8_t *ip_addr, int *port)
+static int get_portal(const char *str, int *af, char *ip_addr, uint16_t *port)
 {
+	uint8_t addr[sizeof(struct in6_addr)];
 	char *p = strrchr(str, ':');
 
 	if (p == NULL)
 		return -EINVAL;
 
-	if (sscanf(p, ":%d", port) != 1)
+	if (sscanf(p, ":%hu", port) != 1)
 		return -EINVAL;
 
 	*p = '\0';
 	*af = strchr(str, ':') ? AF_INET6 : AF_INET;
-	if (inet_pton(*af, str, ip_addr) != 1)
+	if (inet_pton(*af, str, addr) != 1)
 		return -EINVAL;
+
+	strncpy(ip_addr, str, INET6_ADDRSTRLEN);
 
 	return 0;
 }
 
 static struct portal *configfs_portal_init(struct tpg *tpg, int af,
-					   const uint8_t *ip_addr, int port)
+					   const char *ip_addr, uint16_t port)
 {
 	struct portal *portal = malloc(sizeof(struct portal));
 
 	portal->af = af;
-	memcpy(portal->ip_addr, ip_addr, sizeof(struct in6_addr));
+	strncpy(portal->ip_addr, ip_addr, INET6_ADDRSTRLEN);
 	portal->port = port;
 	portal->updated = false;
 	list_add(&tpg->portals, &portal->list);
@@ -219,7 +221,7 @@ static int configfs_tpg_update(struct target *tgt, struct tpg *tpg)
 	char np_path[512];
 
 	snprintf(np_path, sizeof(np_path),
-		 CONFIGFS_ISCSI_PATH "/%s/tpgt_%" PRIu32 "/np",
+		 CONFIGFS_ISCSI_PATH "/%s/tpgt_%hu/np",
 		 tgt->name, tpg->tag);
 	np_dir = opendir(np_path);
 	if (np_dir == NULL)
@@ -236,16 +238,15 @@ static int configfs_tpg_update(struct target *tgt, struct tpg *tpg)
 			continue;
 
 		int af;
-		uint8_t ip_addr[sizeof(struct in6_addr)];
-		int port;
+		char ip_addr[INET6_ADDRSTRLEN];
+		uint16_t port;
 		if (get_portal(dirent->d_name, &af, ip_addr, &port) != 0)
 			continue;
 
 		struct portal *p;
 		portal = NULL;
 		list_for_each(&tpg->portals, p, list) {
-			if (memcmp(p->ip_addr, ip_addr, sizeof(ip_addr)) == 0 &&
-			    p->port == port)
+			if (streq(p->ip_addr, ip_addr) && p->port == port)
 				portal = p;
 		}
 
@@ -272,7 +273,7 @@ static int configfs_target_update(struct target *tgt)
 	DIR *tgt_dir;
 	struct dirent *dirent;
 	struct tpg *tpg, *tpg_next;
-	uint32_t tpg_tag;
+	uint16_t tpg_tag;
 	char tgt_path[512];
 
 	snprintf(tgt_path, sizeof(tgt_path), CONFIGFS_ISCSI_PATH "/%s", tgt->name);
@@ -288,7 +289,7 @@ static int configfs_target_update(struct target *tgt)
 		if (!strstarts(dirent->d_name, "tpgt_"))
 			continue;
 
-		sscanf(dirent->d_name, "tpgt_%" PRIu32, &tpg_tag);
+		sscanf(dirent->d_name, "tpgt_%hu", &tpg_tag);
 		tpg = tpg_find_by_tag(tgt, tpg_tag);
 
 		if (!tpg)
@@ -387,17 +388,15 @@ void configfs_show(void)
 	struct target *tgt;
 	struct tpg *tpg;
 	struct portal *portal;
-	char str[INET6_ADDRSTRLEN];
 
 	list_for_each(&targets, tgt, list) {
 		log_print(LOG_DEBUG, "target: name = %s", tgt->name);
 		list_for_each(&tgt->tpgs, tpg, list) {
-			log_print(LOG_DEBUG, "  tpg: tag = %" PRIu32 ", enabled = %d",
+			log_print(LOG_DEBUG, "  tpg: tag = %hu, enabled = %d",
 				  tpg->tag, tpg->enabled);
 			list_for_each(&tpg->portals, portal, list) {
-				inet_ntop(portal->af, portal->ip_addr, str, INET6_ADDRSTRLEN);
-				log_print(LOG_DEBUG, "    portal: af = IP%s, ip_addr = %s, port = %d",
-					  portal->af == AF_INET ? "v4" : "v6", str, portal->port);
+				log_print(LOG_DEBUG, "    portal: af = IPv%d, ip_addr = %s, port = %hu",
+					  portal->af == AF_INET ? 4 : 6, portal->ip_addr, portal->port);
 			}
 		}
 	}
@@ -437,9 +436,9 @@ static void configfs_handle_tpg(const struct inotify_event *event)
 {
 	struct target *tgt;
 	struct tpg *tpg = NULL;
-	uint32_t tpg_tag;
+	uint16_t tpg_tag;
 
-	if (sscanf(event->name, "tpgt_%" PRIu32, &tpg_tag) != 1)
+	if (sscanf(event->name, "tpgt_%hu", &tpg_tag) != 1)
 		return;
 
 	tgt = target_find_by_watch(event->wd);
@@ -456,7 +455,7 @@ static void configfs_handle_tpg(const struct inotify_event *event)
 		inotify_rm_watch(inotify_fd, tpg->watch_fd);
 		free(tpg);
 	}
-	log_print(LOG_DEBUG, "inotify[%c] %s/tpg%" PRIu32,
+	log_print(LOG_DEBUG, "inotify[%c] %s/tpg%hu",
 		  inotify_event_str(event), tgt->name, tpg_tag);
 }
 
@@ -474,7 +473,7 @@ static void configfs_handle_tpg_subtree(const struct inotify_event *event)
 		return;
 
 	configfs_tpg_update(tgt, tpg);
-	log_print(LOG_DEBUG, "inotify[%c] %s/tpg%" PRIu32 "/%s",
+	log_print(LOG_DEBUG, "inotify[%c] %s/tpg%hu/%s",
 		  inotify_event_str(event), tgt->name, tpg->tag, event->name);
 }
 
@@ -485,8 +484,8 @@ void configfs_handle_events(void)
 	struct inotify_event *event;
 	char *p;
 	int af;
-	uint8_t ip_addr[sizeof(struct in6_addr)];
-	int port;
+	char ip_addr[INET6_ADDRSTRLEN];
+	uint16_t port;
 
 	nr = read(inotify_fd, buf, INOTIFY_BUF_LEN);
 	for (p = buf; p < buf + nr; ) {
