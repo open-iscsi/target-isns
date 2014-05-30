@@ -190,7 +190,15 @@ static int get_portal(const char *str, int *af, char *ip_addr, uint16_t *port)
 		return -EINVAL;
 
 	*p = '\0';
-	*af = strchr(str, ':') ? AF_INET6 : AF_INET;
+	/* An IPv6 address in configfs is enclosed with []; remove them. */
+	if (str[0] == '[') {
+		*af = AF_INET6;
+		str++;
+		p = strchr(str, ']');
+		*p = '\0';
+	} else
+		*af = AF_INET;
+
 	if (inet_pton(*af, str, addr) != 1)
 		return -EINVAL;
 
