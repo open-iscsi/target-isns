@@ -35,7 +35,6 @@
 
 #include <ccan/list/list.h>
 #include <ccan/str/str.h>
-#include <arpa/inet.h>
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -55,24 +54,6 @@
 
 LIST_HEAD(targets);
 static int inotify_fd = -1;
-
-struct tpg {
-	struct list_node list;
-	uint16_t tag;
-	bool enabled;
-	struct list_head portals;
-	bool updated;
-	int watch_fd;
-	int np_watch_fd;
-};
-
-struct portal {
-	struct list_node list;
-	int af;
-	char ip_addr[INET6_ADDRSTRLEN];
-	uint16_t port;
-	bool updated;
-};
 
 
 bool configfs_iscsi_path_exists(void)

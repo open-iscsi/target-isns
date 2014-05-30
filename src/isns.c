@@ -369,6 +369,28 @@ static int isns_attr_query(char *name)
 	return 0;
 }
 
+static void isns_ip_addr_set(const struct portal *portal, uint8_t *ip_addr)
+{
+	memset(ip_addr, 0, 16);
+
+	if (streq(portal->ip_addr, "0.0.0.0") ||
+	    streq(portal->ip_addr, "::")) {
+		/* Use local IP address */
+		memcpy(ip_addr, ip, 16);
+	} else if (portal->af == AF_INET) {
+		uint32_t addr;
+		inet_pton(AF_INET, portal->ip_addr, &addr);
+
+		/* RFC 4171 6.3.1: convert v4 to mapped v6 */
+		ip_addr[10] = ip_addr[11] = 0xff;
+		ip_addr[15] = 0xff & (addr >> 24);
+		ip_addr[14] = 0xff & (addr >> 16);
+		ip_addr[13] = 0xff & (addr >> 8);
+		ip_addr[12] = 0xff & addr;
+	} else if (portal->af == AF_INET6)
+		inet_pton(AF_INET6, portal->ip_addr, ip_addr);
+}
+
 int isns_target_register(const struct target *target)
 {
 	char buf[4096];
@@ -376,7 +398,8 @@ int isns_target_register(const struct target *target)
 	struct isns_hdr *hdr = (struct isns_hdr *) buf;
 	struct isns_tlv *tlv;
 	struct target *tgt;
-	uint32_t port = htonl(3260); /* FIXME: */
+	struct tpg *tpg;
+	struct portal *portal;
 	uint32_t node = htonl(ISNS_NODE_TARGET);
 	uint32_t protocol = htonl(ISNS_ENTITY_PROTOCOL_ISCSI);
 	uint32_t period = htonl(DEFAULT_REGISTRATION_PERIOD);
@@ -415,28 +438,47 @@ int isns_target_register(const struct target *target)
 	length += isns_tlv_set(&tlv, ISNS_ATTR_REGISTRATION_PERIOD,
 			       sizeof(period), &period);
 
-	if (first_registration) {
-		length += isns_tlv_set(&tlv, ISNS_ATTR_PORTAL_IP_ADDRESS,
-				       sizeof(ip), &ip);
-		length += isns_tlv_set(&tlv, ISNS_ATTR_PORTAL_PORT,
-				       sizeof(port), &port);
-		flags = ISNS_FLAG_REPLACE;
-
-		if (scn_listen_port) {
-			uint32_t sport = htonl(scn_listen_port);
-			length += isns_tlv_set(&tlv, ISNS_ATTR_SCN_PORT,
-					       sizeof(sport), &sport);
-		}
-	}
-
 	list_for_each(&targets, tgt, list) {
 		if (tgt != target && !all_targets)
 			continue;
 
+		/* Register the iSCSI target. */
 		length += isns_tlv_set_string(&tlv, ISNS_ATTR_ISCSI_NAME,
 					      tgt->name);
 		length += isns_tlv_set(&tlv, ISNS_ATTR_ISCSI_NODE_TYPE,
 				       sizeof(node), &node);
+
+		/* Register the TPGs. */
+		list_for_each(&tgt->tpgs, tpg, list) {
+			uint32_t tag = htonl(tpg->tag);
+
+			length += isns_tlv_set(&tlv, ISNS_ATTR_PG_TAG,
+					       sizeof(tag), &tag);
+			list_for_each(&tpg->portals, portal, list) {
+				uint8_t ip_addr[16];
+				uint32_t port = htonl(portal->port);
+
+				isns_ip_addr_set(portal, ip_addr);
+				length += isns_tlv_set(&tlv, ISNS_ATTR_PG_PORTAL_IP_ADDRESS,
+						       sizeof(ip_addr), &ip_addr);
+				length += isns_tlv_set(&tlv, ISNS_ATTR_PG_PORTAL_PORT,
+						       sizeof(port), &port);
+			}
+		}
+
+		/* Register the portals. */
+		list_for_each(&tgt->tpgs, tpg, list) {
+			list_for_each(&tpg->portals, portal, list) {
+				uint8_t ip_addr[16];
+				uint32_t port = htonl(portal->port);
+
+				isns_ip_addr_set(portal, ip_addr);
+				length += isns_tlv_set(&tlv, ISNS_ATTR_PORTAL_IP_ADDRESS,
+						       sizeof(ip_addr), &ip_addr);
+				length += isns_tlv_set(&tlv, ISNS_ATTR_PORTAL_PORT,
+						       sizeof(port), &port);
+			}
+		}
 	}
 
 	flags |= ISNS_FLAG_CLIENT | ISNS_FLAG_LAST_PDU | ISNS_FLAG_FIRST_PDU;

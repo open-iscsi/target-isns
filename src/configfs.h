@@ -8,6 +8,7 @@
 #ifndef __CONFIGFS_H__
 #define __CONFIGFS_H__
 
+#include <arpa/inet.h>
 #include <linux/limits.h>
 #include <stdbool.h>
 #include <sys/inotify.h>
@@ -19,6 +20,24 @@ struct target {
 	struct list_head tpgs;
 	bool updated;
 	int watch_fd;
+};
+
+struct tpg {
+	struct list_node list;
+	uint16_t tag;
+	bool enabled;
+	struct list_head portals;
+	bool updated;
+	int watch_fd;
+	int np_watch_fd;
+};
+
+struct portal {
+	struct list_node list;
+	int af;
+	char ip_addr[INET6_ADDRSTRLEN];
+	uint16_t port;
+	bool updated;
 };
 
 #define ALL_TARGETS ((struct target*) 1)
