@@ -41,3 +41,19 @@ the iSNS server:
 
 * Microsoft iSNS server: 5 minutes (target-isns default value)
 * OpenIndiana iSNS server: 1 day (OpenIndiana default value)
+
+Portal registration
+-------------------
+
+The Microsoft iSNS server returns an error when an iSCSI portal is
+listed more than once in the operating attributes of an iSNS
+DevAttrReg message. The Microsoft iSNS server probably enforces the
+following requirement from RFC 4171:
+
+  5.6.5.1. Device Attribute Registration Request (DevAttrReg)
+
+  "A given object may only appear a maximum of once in the Operating
+   Attributes of a message"
+
+The OpenIndiana iSNS server has no problem with duplicate portals in a
+DevAttrReg message.
