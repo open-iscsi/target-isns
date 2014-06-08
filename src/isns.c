@@ -597,7 +597,7 @@ int isns_target_deregister(const struct target *target)
 	return 0;
 }
 
-static int recv_hdr(int fd, struct isns_io *rx, struct isns_hdr *hdr)
+static int recv_hdr(int fd, struct isns_io *rx, const struct isns_hdr *hdr)
 {
 	if (rx->offset < sizeof(*hdr)) {
 		ssize_t err = read(fd, rx->buf + rx->offset,
@@ -688,7 +688,7 @@ static int recv_pdu(int fd, struct isns_io *rx, struct isns_hdr *hdr)
 		  function, length, flags, transaction, sequence);	\
 }
 
-static char *print_scn_pdu(struct isns_hdr *hdr)
+static char *print_scn_pdu(const struct isns_hdr *hdr)
 {
 	struct isns_tlv *tlv = (struct isns_tlv *) hdr->pdu;
 	uint16_t length = ntohs(hdr->length);
@@ -739,7 +739,7 @@ static char *print_scn_pdu(struct isns_hdr *hdr)
 
 static void isns_registration_set_period(uint32_t period);
 
-static void qry_rsp_handle(struct isns_hdr *hdr)
+static void qry_rsp_handle(const struct isns_hdr *hdr)
 {
 	struct isns_tlv *tlv;
 	uint16_t length = ntohs(hdr->length);
@@ -1071,7 +1071,7 @@ static void isns_registration_set_period(uint32_t period)
 	itimer_start(registration_timer_fd, registration_period - 10);
 }
 
-int isns_init(char *addr)
+int isns_init(const char *addr)
 {
 	int err;
 	char port[8];

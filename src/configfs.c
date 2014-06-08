@@ -78,7 +78,7 @@ static struct target *target_find_by_watch(int watch_fd)
 	return NULL;
 }
 
-static struct tpg *tpg_find_by_tag(struct target *tgt, uint16_t tpg_tag)
+static struct tpg *tpg_find_by_tag(const struct target *tgt, uint16_t tpg_tag)
 {
 	struct tpg *tpg;
 
@@ -89,7 +89,7 @@ static struct tpg *tpg_find_by_tag(struct target *tgt, uint16_t tpg_tag)
 	return NULL;
 }
 
-static struct tpg *tpg_find_by_watch(struct target *tgt, int watch_fd)
+static struct tpg *tpg_find_by_watch(const struct target *tgt, int watch_fd)
 {
 	struct tpg *tpg;
 
@@ -119,7 +119,7 @@ static struct target *configfs_target_init(const char *name)
 	return tgt;
 }
 
-static bool configfs_tpg_enabled(struct target *tgt, uint16_t tpg_tag)
+static bool configfs_tpg_enabled(const struct target *tgt, uint16_t tpg_tag)
 {
 	int fd;
 	ssize_t nr;

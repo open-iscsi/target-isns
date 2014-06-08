@@ -19,7 +19,7 @@ static struct timeval start;
 
 
 static int timeval_substract(struct timeval *result,
-			     struct timeval *x,
+			     const struct timeval *x,
 			     struct timeval *y)
 {
 	/* Perform the carry for the later subtraction by updating y. */

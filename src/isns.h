@@ -12,7 +12,7 @@ int isns_handle(void);
 
 int isns_scn_handle(bool is_accept);
 
-int isns_init(char *addr);
+int isns_init(const char *addr);
 
 void isns_start(void);
 
