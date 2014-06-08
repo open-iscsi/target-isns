@@ -166,7 +166,7 @@ static int isns_connect(void)
 
 	log_print(LOG_DEBUG, "iSNS connection opened (fd = %d)", fd);
 
-	if (!strlen(eid)) {
+	if (eid[0] == '\0') {
 		err = isns_get_ip(fd);
 		if (err) {
 			close(fd);
@@ -768,7 +768,7 @@ found:
 		goto free_query;
 	}
 
-	if (!strlen(query->name)) {
+	if (query->name[0] == '\0') {
 		log_print(LOG_DEBUG, "%s %d: skip %u",
 			  __func__, __LINE__, transaction);
 		goto free_query;
