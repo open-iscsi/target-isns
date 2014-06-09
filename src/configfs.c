@@ -485,6 +485,7 @@ void configfs_handle_events(void)
 		    streq(event->name, "acls") ||
 		    streq(event->name, "attrib") ||
 		    streq(event->name, "auth") ||
+		    streq(event->name, "fabric_statistics") ||
 		    streq(event->name, "lun") ||
 		    streq(event->name, "np") ||
 		    streq(event->name, "param"))
