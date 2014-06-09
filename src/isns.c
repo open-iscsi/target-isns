@@ -460,6 +460,7 @@ int isns_target_register(const struct target *target)
 	uint32_t period = htonl(DEFAULT_REGISTRATION_PERIOD);
 	int err;
 	bool all_targets = target == ALL_TARGETS;
+	struct isns_query *query;
 
 	if (all_targets) {
 		if (list_empty(&targets))
@@ -473,6 +474,11 @@ int isns_target_register(const struct target *target)
 	log_print(LOG_DEBUG, "registering target %s",
 		  all_targets ? "(all)" : target->name);
 
+	query = malloc(sizeof(*query));
+	if (!query)
+		return 0;
+	strcpy(query->name, target->name);
+	list_add(&query_list, &query->list);
 
 	memset(buf, 0, sizeof(buf));
 	tlv = (struct isns_tlv *) hdr->pdu;
@@ -551,6 +557,7 @@ int isns_target_register(const struct target *target)
 	flags |= ISNS_FLAG_CLIENT | ISNS_FLAG_LAST_PDU | ISNS_FLAG_FIRST_PDU;
 	isns_hdr_init(hdr, ISNS_FUNC_DEV_ATTR_REG, length, flags,
 		      ++transaction, 0);
+	query->transaction = transaction;
 
 	err = write(isns_fd, buf, length + sizeof(struct isns_hdr));
 	if (err < 0)
@@ -748,7 +755,7 @@ static char *print_scn_pdu(const struct isns_hdr *hdr)
 
 static void isns_registration_set_period(uint32_t period);
 
-static void qry_rsp_handle(const struct isns_hdr *hdr)
+static void isns_rsp_handle(const struct isns_hdr *hdr)
 {
 	struct isns_tlv *tlv;
 	uint16_t length = ntohs(hdr->length);
@@ -878,9 +885,8 @@ int isns_handle(void)
 
 	switch (function) {
 	case ISNS_FUNC_DEV_ATTR_REG_RSP:
-		break;
 	case ISNS_FUNC_DEV_ATTR_QRY_RSP:
-		qry_rsp_handle(hdr);
+		isns_rsp_handle(hdr);
 		break;
 	case ISNS_FUNC_DEV_DEREG_RSP:
 	case ISNS_FUNC_SCN_REG_RSP:
