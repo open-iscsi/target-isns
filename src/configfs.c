@@ -164,7 +164,7 @@ static int get_portal(const char *str, int *af, char *ip_addr, uint16_t *port)
 	uint8_t addr[sizeof(struct in6_addr)];
 	char *p = strrchr(str, ':');
 
-	if (p == NULL)
+	if (!p)
 		return -EINVAL;
 
 	if (sscanf(p, ":%hu", port) != 1)
@@ -213,7 +213,7 @@ static int configfs_tpg_update(struct target *tgt, struct tpg *tpg)
 		 CONFIGFS_ISCSI_PATH "/%s/tpgt_%hu/np",
 		 tgt->name, tpg->tag);
 	np_dir = opendir(np_path);
-	if (np_dir == NULL)
+	if (!np_dir)
 		return -ENOENT;
 
 	tpg->enabled = configfs_tpg_enabled(tgt, tpg->tag);
@@ -267,7 +267,7 @@ static int configfs_target_update(struct target *tgt)
 
 	snprintf(tgt_path, sizeof(tgt_path), CONFIGFS_ISCSI_PATH "/%s", tgt->name);
 	tgt_dir = opendir(tgt_path);
-	if (tgt_dir == NULL)
+	if (!tgt_dir)
 		return -ENOENT;
 
 	list_for_each(&tgt->tpgs, tpg, list) {
@@ -312,7 +312,7 @@ int configfs_init(void)
 		goto out;
 
 	iscsi_dir = opendir(CONFIGFS_ISCSI_PATH);
-	if (iscsi_dir == NULL)
+	if (!iscsi_dir)
 		goto out;
 
 	list_for_each(&targets, tgt, list) {
@@ -407,7 +407,7 @@ static void configfs_handle_target(const struct inotify_event *event)
 {
 	struct target *tgt = target_find(event->name);
 
-	if ((event->mask & IN_CREATE) && tgt == NULL) {
+	if ((event->mask & IN_CREATE) && !tgt) {
 		tgt = configfs_target_init(event->name);
 		configfs_target_update(tgt);
 		isns_target_register(tgt);
@@ -431,12 +431,12 @@ static void configfs_handle_tpg(const struct inotify_event *event)
 		return;
 
 	tgt = target_find_by_watch(event->wd);
-	if (tgt == NULL)
+	if (!tgt)
 		return;
 
 	tpg = tpg_find_by_tag(tgt, tpg_tag);
 
-	if ((event->mask & IN_CREATE) && tpg == NULL) {
+	if ((event->mask & IN_CREATE) && !tpg) {
 		tpg = configfs_tpg_init(tgt, tpg_tag);
 		configfs_tpg_update(tgt, tpg);
 	} else if ((event->mask & IN_DELETE) && tpg) {
@@ -458,7 +458,7 @@ static void configfs_handle_tpg_subtree(const struct inotify_event *event)
 		if (tpg)
 			break;
 	}
-	if (tpg == NULL)
+	if (!tpg)
 		return;
 
 	configfs_tpg_update(tgt, tpg);

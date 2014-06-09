@@ -369,7 +369,7 @@ static int isns_attr_query(char *name)
 		return 0;
 
 	query = malloc(sizeof(struct isns_query));
-	if (query == NULL)
+	if (!query)
 		return 0;
 	list_add(&query_list, &query->list);
 
@@ -774,7 +774,7 @@ found:
 		goto free_query;
 	}
 
-	if (!streq(query->name, EID_NAME_KEY) && target_find(query->name) == NULL) {
+	if (!streq(query->name, EID_NAME_KEY) && !target_find(query->name)) {
 		log_print(LOG_ERR, "%s %d: unknown query name %s",
 			  __func__, __LINE__, query->name);
 		goto free_query;

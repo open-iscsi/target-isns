@@ -57,7 +57,7 @@ int conffile_read(void)
 			continue;
 
 		value = strchr(p, '=');
-		if (*p == '=' || value == NULL) {
+		if (*p == '=' || !value) {
 			log_print(LOG_WARNING, "Cannot parse '%s' in " CONFFILE, line);
 			continue;
 		}
