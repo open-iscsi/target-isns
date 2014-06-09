@@ -72,7 +72,6 @@ static uint32_t registration_period = DEFAULT_REGISTRATION_PERIOD;
 static char eid[ISCSI_NAME_LEN];
 static uint8_t ip[16]; /* IET supports only one portal */
 static struct sockaddr_storage ss;
-static char source_attribute[ISCSI_NAME_LEN] = "";
 
 static int isns_get_ip(int fd)
 {
@@ -117,6 +116,25 @@ static int isns_get_ip(int fd)
 	}
 
 	return 0;
+}
+
+static char *isns_source_attribute_get(void)
+{
+	static char source_attribute[ISCSI_NAME_LEN] = "";
+	struct target *target;
+
+	if (list_empty(&targets)) {
+		source_attribute[0] = '\0';
+		log_print(LOG_DEBUG, "source attribute cleared");
+	} else if (source_attribute[0] == '\0' ||
+		   !target_find(source_attribute)) {
+		target = list_top(&targets, struct target, list);
+		strncpy(source_attribute, target->name, ISCSI_NAME_LEN);
+		log_print(LOG_DEBUG, "source attribute set to %s",
+			  source_attribute);
+	}
+
+	return source_attribute;
 }
 
 static void isns_portals_cache_init(struct isns_portals_cache *cache)
@@ -334,7 +352,8 @@ static int isns_eid_attr_query(void)
 
 	strcpy(query->name, EID_NAME_KEY);
 
-	length += isns_tlv_set_string(&tlv, ISNS_ATTR_ISCSI_NAME, source_attribute);
+	length += isns_tlv_set_string(&tlv, ISNS_ATTR_ISCSI_NAME,
+				      isns_source_attribute_get());
 	length += isns_tlv_set_string(&tlv, ISNS_ATTR_ENTITY_IDENTIFIER, eid);
 	length += isns_tlv_set(&tlv, 0, 0, 0);
 	length += isns_tlv_set(&tlv, ISNS_ATTR_REGISTRATION_PERIOD, 0, 0);
@@ -440,7 +459,6 @@ int isns_target_register(const struct target *target)
 	uint32_t protocol = htonl(ISNS_ENTITY_PROTOCOL_ISCSI);
 	uint32_t period = htonl(DEFAULT_REGISTRATION_PERIOD);
 	int err;
-	bool first_registration = source_attribute[0] == '\0';
 	bool all_targets = target == ALL_TARGETS;
 
 	if (all_targets) {
@@ -452,19 +470,15 @@ int isns_target_register(const struct target *target)
 	if (isns_fd == -1 && isns_connect() < 0)
 		return 0;
 
-	if (first_registration) {
-		strncpy(source_attribute, target->name, ISCSI_NAME_LEN);
-		source_attribute[ISCSI_NAME_LEN - 1] = '\0';
-	}
+	log_print(LOG_DEBUG, "registering target %s",
+		  all_targets ? "(all)" : target->name);
 
-	log_print(LOG_DEBUG, "registering target %s %s",
-		  all_targets ? "(all)" : target->name,
-		  first_registration ? "(first)" : "");
 
 	memset(buf, 0, sizeof(buf));
 	tlv = (struct isns_tlv *) hdr->pdu;
 
-	length += isns_tlv_set_string(&tlv, ISNS_ATTR_ISCSI_NAME, source_attribute);
+	length += isns_tlv_set_string(&tlv, ISNS_ATTR_ISCSI_NAME,
+				      isns_source_attribute_get());
 	length += isns_tlv_set_string(&tlv, ISNS_ATTR_ENTITY_IDENTIFIER, eid);
 	length += isns_tlv_set(&tlv, 0, 0, 0);
 
@@ -545,9 +559,6 @@ int isns_target_register(const struct target *target)
 	if (scn_listen_port)
 		isns_scn_register();
 
-	if (first_registration)
-		isns_eid_attr_query();
-
 	return 0;
 }
 
@@ -575,7 +586,8 @@ int isns_target_deregister(const struct target *target)
 	memset(buf, 0, sizeof(buf));
 	tlv = (struct isns_tlv *) hdr->pdu;
 
-	length += isns_tlv_set_string(&tlv, ISNS_ATTR_ISCSI_NAME, source_attribute);
+	length += isns_tlv_set_string(&tlv, ISNS_ATTR_ISCSI_NAME,
+				      isns_source_attribute_get());
 	length += isns_tlv_set(&tlv, 0, 0, 0);
 
 	if (last || all_targets)
@@ -590,9 +602,6 @@ int isns_target_deregister(const struct target *target)
 	err = write(isns_fd, buf, length + sizeof(struct isns_hdr));
 	if (err < 0)
 		log_print(LOG_ERR, "%s %d: %s", __func__, __LINE__, strerror(errno));
-
-	if (last || all_targets)
-		memset(source_attribute, 0, ISCSI_NAME_LEN);
 
 	return 0;
 }
