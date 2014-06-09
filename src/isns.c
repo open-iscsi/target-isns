@@ -850,7 +850,6 @@ found:
 				name = NULL;
 			break;
 		default:
-			log_print(LOG_DEBUG, "attribute %" PRIu32 " ignored", tag);
 			name = NULL;
 			break;
 		}
