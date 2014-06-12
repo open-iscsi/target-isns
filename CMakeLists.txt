@@ -6,7 +6,7 @@
 #
 
 project(target-isns "C")
-set(PROJECT_VERSION "0.1")
+set(PROJECT_VERSION "0.3")
 
 cmake_minimum_required(VERSION 2.8)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Werror -std=c99")
