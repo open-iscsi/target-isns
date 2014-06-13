@@ -39,7 +39,7 @@ int conffile_read(void)
 	FILE *file;
 	char line[1024];
 
-	memset(&config, sizeof(config), 0);
+	memset(&config, 0, sizeof(config));
 	config.log_level = LOG_INFO;
 	config.isns_port = ISNS_PORT;
 
