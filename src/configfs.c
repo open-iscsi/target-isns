@@ -418,7 +418,7 @@ static void configfs_handle_target(const struct inotify_event *event)
 		free(tgt);
 	}
 	log_print(LOG_DEBUG, "inotify[%c] %s",
-		  inotify_event_str(event), tgt->name);
+		  inotify_event_str(event), event->name);
 }
 
 static void configfs_handle_tpg(const struct inotify_event *event)
