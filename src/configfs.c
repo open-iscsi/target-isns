@@ -477,6 +477,11 @@ void configfs_handle_events(void)
 	uint16_t port;
 
 	nr = read(inotify_fd, buf, INOTIFY_BUF_LEN);
+	if (nr < 0) {
+		log_print(LOG_ERR, "cannot read inotify fd %d (%d)",
+			  inotify_fd, errno);
+		return;
+	}
 	for (p = buf; p < buf + nr; ) {
 		event = (struct inotify_event*) p;
 		p += sizeof(struct inotify_event) + event->len;
