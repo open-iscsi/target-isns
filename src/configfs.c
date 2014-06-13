@@ -195,6 +195,7 @@ static struct portal *configfs_portal_init(struct tpg *tpg, int af,
 
 	portal->af = af;
 	strncpy(portal->ip_addr, ip_addr, INET6_ADDRSTRLEN);
+	portal->ip_addr[INET6_ADDRSTRLEN - 1] = '\0';
 	portal->port = port;
 	portal->updated = false;
 	list_add(&tpg->portals, &portal->list);
