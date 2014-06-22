@@ -5,8 +5,7 @@
  * SPDX-License-Identifier:	GPL-2.0+
  */
 
-#ifndef __CONFIGFS_H__
-#define __CONFIGFS_H__
+#pragma once
 
 #include <arpa/inet.h>
 #include <linux/limits.h>
@@ -53,5 +52,3 @@ void configfs_show(void);
 void configfs_handle_events(void);
 
 struct target *target_find(const char *target_name);
-
-#endif

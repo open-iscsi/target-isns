@@ -5,8 +5,7 @@
  * SPDX-License-Identifier:	GPL-2.0+
  */
 
-#ifndef __ISNS_H__
-#define __ISNS_H__
+#pragma once
 
 int isns_handle(void);
 
@@ -27,5 +26,3 @@ void isns_target_deregister(const struct target *target);
 int isns_registration_timer_init(void);
 
 void isns_registration_refresh(void);
-
-#endif

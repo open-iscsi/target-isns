@@ -5,9 +5,6 @@
  * SPDX-License-Identifier:	GPL-2.0+
  */
 
-#ifndef __VERSION_H__
-#define __VERSION_H__
+#pragma once
 
 #define VERSION "0.3"
-
-#endif

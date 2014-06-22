@@ -5,8 +5,7 @@
  * SPDX-License-Identifier:	GPL-2.0+
  */
 
-#ifndef __UTIL_H__
-#define __UTIL_H__
+#pragma once
 
 #include <inttypes.h>
 
@@ -21,5 +20,3 @@ void pidfile_create(void);
 void pidfile_remove(void);
 
 int conffile_read(void);
-
-#endif

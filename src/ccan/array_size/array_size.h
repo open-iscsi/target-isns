@@ -5,8 +5,8 @@
  * SPDX-License-Identifier:     CC0-1.0
  */
 
-#ifndef CCAN_ARRAY_SIZE_H
-#define CCAN_ARRAY_SIZE_H
+#pragma once
+
 #include <ccan/build_assert/build_assert.h>
 
 /**
@@ -24,5 +24,3 @@
 #define _array_size_chk(arr)						\
 	BUILD_ASSERT_OR_ZERO(!__builtin_types_compatible_p(__typeof__(arr),	\
 							   __typeof__(&(arr)[0])))
-
-#endif /* CCAN_ARRAY_SIZE_H */

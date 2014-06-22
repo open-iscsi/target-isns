@@ -5,8 +5,8 @@
  * SPDX-License-Identifier:	MIT
  */
 
-#ifndef CCAN_DAEMONIZE_H
-#define CCAN_DAEMONIZE_H
+#pragma once
+
 #include <stdbool.h>
 
 /**
@@ -23,5 +23,3 @@
  *  - Umask is set to 0.
  */
 bool daemonize(void);
-
-#endif /* CCAN_DAEMONIZE_H */

@@ -8,8 +8,7 @@
  * SPDX-License-Identifier:	GPL-2.0+
  */
 
-#ifndef ISNS_PROTO_H
-#define ISNS_PROTO_H
+#pragma once
 
 #define ISNS_PORT	3205
 #define ISNS_ALIGN	4
@@ -201,4 +200,3 @@ const char *isns_function_get_abbr(uint16_t function);
 #define ISNS_SCN_FLAG_OBJECT_UPDATED		(1U << 29)
 #define ISNS_SCN_FLAG_DD_REMOVED		(1U << 30)
 #define ISNS_SCN_FLAG_DD_ADDED			(1U << 31)
-#endif

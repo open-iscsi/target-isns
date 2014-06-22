@@ -5,8 +5,7 @@
  * SPDX-License-Identifier:     CC0-1.0
  */
 
-#ifndef CCAN_BUILD_ASSERT_H
-#define CCAN_BUILD_ASSERT_H
+#pragma once
 
 /**
  * BUILD_ASSERT - assert a build-time dependency.
@@ -42,5 +41,3 @@
  */
 #define BUILD_ASSERT_OR_ZERO(cond) \
 	(sizeof(char [1 - 2*!(cond)]) - 1)
-
-#endif /* CCAN_BUILD_ASSERT_H */

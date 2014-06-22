@@ -5,8 +5,8 @@
  * SPDX-License-Identifier:	CC0-1.0
  */
 
-#ifndef CCAN_STR_H
-#define CCAN_STR_H
+#pragma once
+
 #include <stdbool.h>
 #include <string.h>
 
@@ -62,5 +62,3 @@ static inline bool strends(const char *str, const char *postfix)
 #define stringify(expr)		stringify_1(expr)
 /* Double-indirection required to stringify expansions */
 #define stringify_1(expr)	#expr
-
-#endif /* CCAN_STR_H */

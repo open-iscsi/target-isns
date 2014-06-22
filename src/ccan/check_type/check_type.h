@@ -5,8 +5,7 @@
  * SPDX-License-Identifier:	CC0-1.0
  */
 
-#ifndef CCAN_CHECK_TYPE_H
-#define CCAN_CHECK_TYPE_H
+#pragma once
 
 /**
  * check_type - issue a warning or build failure if type is not correct.
@@ -55,5 +54,3 @@
 
 #define check_types_match(expr1, expr2)		\
 	((__typeof__(expr1) *)0 != (__typeof__(expr2) *)0)
-
-#endif /* CCAN_CHECK_TYPE_H */

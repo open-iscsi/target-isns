@@ -5,8 +5,8 @@
  * SPDX-License-Identifier:	MIT
  */
 
-#ifndef CCAN_LIST_H
-#define CCAN_LIST_H
+#pragma once
+
 #include <stdbool.h>
 #include <assert.h>
 #include <ccan/container_of/container_of.h>
@@ -623,4 +623,3 @@ static inline void *list_entry_or_null(struct list_head *h,
 		return NULL;
 	return (char *)n - off;
 }
-#endif /* CCAN_LIST_H */

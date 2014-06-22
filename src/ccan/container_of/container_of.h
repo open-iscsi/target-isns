@@ -5,8 +5,8 @@
  * SPDX-License-Identifier:	CC0-1.0
  */
 
-#ifndef CCAN_CONTAINER_OF_H
-#define CCAN_CONTAINER_OF_H
+#pragma once
+
 #include <stddef.h>
 
 #include <ccan/check_type/check_type.h>
@@ -99,5 +99,3 @@
  */
 #define container_off_var(var, member)		\
 	container_off(__typeof__(*var), member)
-
-#endif /* CCAN_CONTAINER_OF_H */
