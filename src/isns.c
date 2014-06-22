@@ -11,6 +11,7 @@
 #define _POSIX_SOURCE
 #include <errno.h>
 #include <inttypes.h>
+#include <limits.h>
 #include <netdb.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -69,8 +70,8 @@ static struct isns_io isns_rx, scn_rx;
 static char *rxbuf;
 static uint16_t transaction;
 static uint32_t registration_period = DEFAULT_REGISTRATION_PERIOD;
-static char eid[ISCSI_NAME_LEN];
-static uint8_t ip[16]; /* IET supports only one portal */
+static char eid[HOST_NAME_MAX];
+static uint8_t ip[16];
 static struct sockaddr_storage ss;
 
 static int isns_get_ip(int fd)
@@ -93,11 +94,14 @@ static int isns_get_ip(int fd)
 	}
 
 	err = getnameinfo(&l.s, sizeof(l.s),
-			  eid, sizeof(eid), NULL, 0, NI_NUMERICHOST);
+			  eid, sizeof(eid), NULL, 0, 0);
 	if (err) {
 		log_print(LOG_ERR, "getnameinfo error %s!", gai_strerror(err));
 		return err;
 	}
+	if (streq(eid, "localhost.localdomain"))
+		getnameinfo(&l.s, sizeof(l.s),
+			    eid, sizeof(eid), NULL, 0, NI_NUMERICHOST);
 
 	switch (l.ss.ss_family) {
 	case AF_INET:
