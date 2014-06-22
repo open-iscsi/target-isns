@@ -13,6 +13,7 @@ set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Werror -std=c99")
 
 add_subdirectory(src)
 install(FILES target-isns.conf DESTINATION /etc/)
+install(FILES target-isns.8 DESTINATION ${CMAKE_INSTALL_PREFIX}/share/man/man8/)
 
 set(ARCHIVE_NAME ${CMAKE_PROJECT_NAME}-${PROJECT_VERSION})
 add_custom_target(dist
