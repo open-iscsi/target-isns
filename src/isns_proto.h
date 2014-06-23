@@ -10,6 +10,7 @@
 
 #pragma once
 
+#define ISCSI_NAME_SIZE	224
 #define ISNS_PORT	3205
 #define ISNS_ALIGN	4
 

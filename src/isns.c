@@ -31,8 +31,6 @@
 #include "itimer.h"
 #include "log.h"
 
-#define ISCSI_NAME_LEN	256
-
 extern void isns_set_fd(int isns, int scn_listen, int scn);
 extern struct list_head targets;
 
@@ -47,7 +45,7 @@ struct isns_io {
 };
 
 struct isns_query {
-	char name[ISCSI_NAME_LEN];
+	char name[ISCSI_NAME_SIZE];
 	uint16_t transaction;
 	struct list_node list;
 };
@@ -124,7 +122,7 @@ static int isns_get_ip(int fd)
 
 static char *isns_source_attribute_get(void)
 {
-	static char source_attribute[ISCSI_NAME_LEN] = "";
+	static char source_attribute[ISCSI_NAME_SIZE] = "";
 	struct target *target;
 
 	if (list_empty(&targets)) {
@@ -133,7 +131,8 @@ static char *isns_source_attribute_get(void)
 	} else if (source_attribute[0] == '\0' ||
 		   !target_find(source_attribute)) {
 		target = list_top(&targets, struct target, list);
-		strncpy(source_attribute, target->name, ISCSI_NAME_LEN);
+		strncpy(source_attribute, target->name, ISCSI_NAME_SIZE);
+		source_attribute[ISCSI_NAME_SIZE - 1] = '\0';
 		log_print(LOG_DEBUG, "source attribute set to %s",
 			  source_attribute);
 	}
@@ -725,8 +724,8 @@ static char *print_scn_pdu(const struct isns_hdr *hdr)
 			if (vlen) {
 				size_t slen = vlen - 1;
 
-				if (slen > ISCSI_NAME_LEN)
-					slen = ISCSI_NAME_LEN;
+				if (slen >= ISCSI_NAME_SIZE)
+					slen = ISCSI_NAME_SIZE - 1;
 
 				*((char *) tlv->value + slen) = 0;
 
@@ -827,8 +826,8 @@ found:
 			if (vlen) {
 				size_t slen = vlen - 1;
 
-				if (slen > ISCSI_NAME_LEN)
-					slen = ISCSI_NAME_LEN;
+				if (slen >= ISCSI_NAME_SIZE)
+					slen = ISCSI_NAME_SIZE - 1;
 
 				*((char *) tlv->value + slen) = 0;
 

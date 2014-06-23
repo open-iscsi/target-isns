@@ -12,10 +12,11 @@
 #include <stdbool.h>
 #include <sys/inotify.h>
 #include <ccan/list/list.h>
+#include "isns_proto.h"
 
 struct target {
 	struct list_node list;
-	char name[224];
+	char name[ISCSI_NAME_SIZE];
 	struct list_head tpgs;
 	bool updated;
 	int watch_fd;
