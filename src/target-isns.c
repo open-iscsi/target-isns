@@ -115,7 +115,7 @@ int main(int argc, char *argv[])
 	int option;
 	int longindex = 0;
 	int ifd = -1, sfd = -1, tfd = -1;
-	struct epoll_event events[1];
+	struct epoll_event events[EPOLL_MAX_FD];
 	ssize_t nr_events;
 	struct signalfd_siginfo siginfo;
 	bool daemon = true;
@@ -202,7 +202,7 @@ int main(int argc, char *argv[])
 
 	isns_start();
 	while (true) {
-		nr_events = epoll_wait(epoll_fd, events, 1, -1);
+		nr_events = epoll_wait(epoll_fd, events, ARRAY_SIZE(events), -1);
 
 		for (int i = 0; i < nr_events; i++) {
 			if (events[i].data.fd == epoll_set[EPOLL_SIGNAL]) {
