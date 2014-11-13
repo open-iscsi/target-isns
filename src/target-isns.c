@@ -177,7 +177,7 @@ int main(int argc, char *argv[])
 		goto quit;
 	}
 
-	if ((epoll_fd = epoll_create(1)) == -1) {
+	if ((epoll_fd = epoll_create1(0)) == -1) {
 		log_print(LOG_ERR, "failed to create epoll instance");
 		goto quit;
 	}
