@@ -7,6 +7,11 @@
 
 #pragma once
 
+#include <inttypes.h>
+#include <stdbool.h>
+
+struct target;
+
 int isns_handle(void);
 
 int isns_scn_handle(bool is_accept);

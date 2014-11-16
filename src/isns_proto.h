@@ -10,6 +10,8 @@
 
 #pragma once
 
+#include <inttypes.h>
+
 #define ISCSI_NAME_SIZE	224
 #define ISNS_PORT	3205
 #define ISNS_ALIGN	4
