@@ -166,6 +166,34 @@ static int isns_portals_cache_add(struct isns_portals_cache *cache,
 	return 0;
 }
 
+static struct isns_query *isns_query_init(const char *name, uint16_t transaction)
+{
+	struct isns_query *query;
+
+	if ((query = malloc(sizeof(struct isns_query))) != NULL) {
+		strncpy(query->name, name, ISCSI_NAME_SIZE);
+		query->name[ISCSI_NAME_SIZE - 1] = '\0';
+		query->transaction = transaction;
+		list_add(&query_list, &query->list);
+	}
+
+	return query;
+}
+
+static struct isns_query *isns_query_pop(uint16_t transaction)
+{
+	struct isns_query *query, *query_next;
+
+	list_for_each_safe(&query_list, query, query_next, list) {
+		if (query->transaction == transaction) {
+			list_del(&query->list);
+			return query;
+		}
+	}
+
+	return NULL;
+}
+
 static int isns_connect(void)
 {
 	int fd, err;
@@ -345,15 +373,12 @@ static int isns_eid_attr_query(void)
 	if (isns_fd == -1 && isns_connect() < 0)
 		return 0;
 
-	query = malloc(sizeof(*query));
-	if (!query)
-		return 0;
-	list_add(&query_list, &query->list);
-
 	memset(buf, 0, sizeof(buf));
 	tlv = (struct isns_tlv *) hdr->pdu;
 
-	strcpy(query->name, EID_NAME_KEY);
+	query = isns_query_init(EID_NAME_KEY, ++transaction);
+	if (!query)
+		return 0;
 
 	length += isns_tlv_set_string(&tlv, ISNS_ATTR_ISCSI_NAME,
 				      isns_source_attribute_get());
@@ -363,8 +388,7 @@ static int isns_eid_attr_query(void)
 
 	flags = ISNS_FLAG_CLIENT | ISNS_FLAG_LAST_PDU | ISNS_FLAG_FIRST_PDU;
 	isns_hdr_init(hdr, ISNS_FUNC_DEV_ATTR_QRY, length, flags,
-		      ++transaction, 0);
-	query->transaction = transaction;
+		      transaction, 0);
 
 	err = write(isns_fd, buf, length + sizeof(struct isns_hdr));
 	if (err < 0)
@@ -382,7 +406,6 @@ static int isns_attr_query(char *name)
 	struct isns_tlv *tlv;
 	uint32_t node = htonl(ISNS_NODE_INITIATOR);
 	struct isns_query *query;
-	struct target *target;
 
 	if (list_empty(&targets))
 		return 0;
@@ -390,21 +413,12 @@ static int isns_attr_query(char *name)
 	if (isns_fd == -1 && isns_connect() < 0)
 		return 0;
 
-	query = malloc(sizeof(struct isns_query));
-	if (!query)
-		return 0;
-	list_add(&query_list, &query->list);
-
 	memset(buf, 0, sizeof(buf));
 	tlv = (struct isns_tlv *) hdr->pdu;
 
-	if (name)
-		snprintf(query->name, sizeof(query->name), "%s", name);
-	else {
-		query->name[0] = '\0';
-		target = list_top(&targets, struct target, list);
-		name = target->name;
-	}
+	query = isns_query_init(name, ++transaction);
+	if (!query)
+		return 0;
 
 	length += isns_tlv_set_string(&tlv, ISNS_ATTR_ISCSI_NAME, name);
 	length += isns_tlv_set(&tlv, ISNS_ATTR_ISCSI_NODE_TYPE,
@@ -416,8 +430,7 @@ static int isns_attr_query(char *name)
 
 	flags = ISNS_FLAG_CLIENT | ISNS_FLAG_LAST_PDU | ISNS_FLAG_FIRST_PDU;
 	isns_hdr_init(hdr, ISNS_FUNC_DEV_ATTR_QRY, length, flags,
-		      ++transaction, 0);
-	query->transaction = transaction;
+		      transaction, 0);
 
 	err = write(isns_fd, buf, length + sizeof(struct isns_hdr));
 	if (err < 0)
@@ -477,14 +490,12 @@ int isns_target_register(const struct target *target)
 	log_print(LOG_DEBUG, "registering target %s",
 		  all_targets ? "(all)" : target->name);
 
-	query = malloc(sizeof(*query));
-	if (!query)
-		return 0;
-	strcpy(query->name, target->name);
-	list_add(&query_list, &query->list);
-
 	memset(buf, 0, sizeof(buf));
 	tlv = (struct isns_tlv *) hdr->pdu;
+
+	query = isns_query_init(target->name, ++transaction);
+	if (!query)
+		return 0;
 
 	length += isns_tlv_set_string(&tlv, ISNS_ATTR_ISCSI_NAME,
 				      isns_source_attribute_get());
@@ -559,8 +570,7 @@ int isns_target_register(const struct target *target)
 
 	flags |= ISNS_FLAG_CLIENT | ISNS_FLAG_LAST_PDU | ISNS_FLAG_FIRST_PDU;
 	isns_hdr_init(hdr, ISNS_FUNC_DEV_ATTR_REG, length, flags,
-		      ++transaction, 0);
-	query->transaction = transaction;
+		      transaction, 0);
 
 	err = write(isns_fd, buf, length + sizeof(struct isns_hdr));
 	if (err < 0)
@@ -764,22 +774,15 @@ static void isns_rsp_handle(const struct isns_hdr *hdr)
 	uint16_t length = ntohs(hdr->length);
 	uint16_t transaction = ntohs(hdr->transaction);
 	uint32_t status = ntohl(hdr->pdu[0]);
-	struct isns_query *query, *query_next;
+	struct isns_query *query;
 	char *name = NULL;
 	uint32_t period;
 
-	list_for_each_safe(&query_list, query, query_next, list) {
-		if (query->transaction == transaction) {
-			list_del(&query->list);
-			goto found;
-		}
+	query = isns_query_pop(transaction);
+	if (!query) {
+		log_print(LOG_ERR, "unknown transaction %u", transaction);
+		return;
 	}
-
-	log_print(LOG_ERR, "%s %d: transaction not found %u",
-		  __func__, __LINE__, transaction);
-
-	return;
-found:
 
 	if (status) {
 		log_print(LOG_ERR, "error in response (status = %" PRIu32 ")",
