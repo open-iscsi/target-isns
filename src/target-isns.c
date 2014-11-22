@@ -100,6 +100,21 @@ static int signal_init(void)
 	return signalfd(-1, &mask, 0);
 }
 
+static bool signal_is_quit(int fd)
+{
+	struct signalfd_siginfo siginfo;
+
+	if (read(fd, &siginfo, sizeof(siginfo)) < sizeof(siginfo))
+		return false;
+
+	if (siginfo.ssi_signo == SIGUSR1)
+		configfs_show();
+
+	return siginfo.ssi_signo == SIGINT ||
+		siginfo.ssi_signo == SIGQUIT ||
+		siginfo.ssi_signo == SIGTERM;
+}
+
 int main(int argc, char *argv[])
 {
 	char optstring[] = "i:p:dfvh";
@@ -117,7 +132,6 @@ int main(int argc, char *argv[])
 	int ifd = -1, sfd = -1, tfd = -1;
 	struct epoll_event events[EPOLL_MAX_FD];
 	ssize_t nr_events;
-	struct signalfd_siginfo siginfo;
 	bool daemon = true;
 
 	conffile_read();
@@ -206,13 +220,8 @@ int main(int argc, char *argv[])
 
 		for (int i = 0; i < nr_events; i++) {
 			if (events[i].data.fd == epoll_set[EPOLL_SIGNAL]) {
-				read(sfd, &siginfo, sizeof(siginfo));
-				if (siginfo.ssi_signo == SIGINT ||
-				    siginfo.ssi_signo == SIGQUIT ||
-				    siginfo.ssi_signo == SIGTERM)
+				if (signal_is_quit(events[i].data.fd))
 					goto quit;
-				else if (siginfo.ssi_signo == SIGUSR1)
-					configfs_show();
 			} else if (events[i].data.fd == epoll_set[EPOLL_INOTIFY])
 				configfs_handle_events();
 			else if (events[i].data.fd == epoll_set[EPOLL_REGISTRATION_TIMER])
