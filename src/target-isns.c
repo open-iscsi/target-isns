@@ -219,18 +219,20 @@ int main(int argc, char *argv[])
 		nr_events = epoll_wait(epoll_fd, events, ARRAY_SIZE(events), -1);
 
 		for (int i = 0; i < nr_events; i++) {
-			if (events[i].data.fd == epoll_set[EPOLL_SIGNAL]) {
-				if (signal_is_quit(events[i].data.fd))
+			int fd = events[i].data.fd;
+
+			if (fd == epoll_set[EPOLL_SIGNAL]) {
+				if (signal_is_quit(fd))
 					goto quit;
-			} else if (events[i].data.fd == epoll_set[EPOLL_INOTIFY])
+			} else if (fd == epoll_set[EPOLL_INOTIFY])
 				configfs_handle_events();
-			else if (events[i].data.fd == epoll_set[EPOLL_REGISTRATION_TIMER])
+			else if (fd == epoll_set[EPOLL_REGISTRATION_TIMER])
 				isns_registration_refresh();
-			else if (events[i].data.fd == epoll_set[EPOLL_ISNS])
+			else if (fd == epoll_set[EPOLL_ISNS])
 				isns_handle();
-			else if (events[i].data.fd == epoll_set[EPOLL_SCN_LISTEN])
+			else if (fd == epoll_set[EPOLL_SCN_LISTEN])
 				isns_scn_handle(true);
-			else if (events[i].data.fd == epoll_set[EPOLL_SCN])
+			else if (fd == epoll_set[EPOLL_SCN])
 				isns_scn_handle(false);
 		}
 	}
