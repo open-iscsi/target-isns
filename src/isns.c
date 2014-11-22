@@ -874,7 +874,6 @@ int isns_handle(void)
 	struct isns_io *rx = &isns_rx;
 	struct isns_hdr *hdr = (struct isns_hdr *) rx->buf;
 	uint16_t function;
-	char *name = NULL;
 
 	err = recv_pdu(isns_fd, rx, hdr);
 	if (err) {
@@ -887,26 +886,8 @@ int isns_handle(void)
 	}
 
 	function = ntohs(hdr->function);
-
-	switch (function) {
-	case ISNS_FUNC_DEV_ATTR_REG_RSP:
-	case ISNS_FUNC_DEV_ATTR_QRY_RSP:
+	if (isns_function_is_rsp(function))
 		isns_rsp_handle(hdr);
-		break;
-	case ISNS_FUNC_DEV_DEREG_RSP:
-	case ISNS_FUNC_SCN_REG_RSP:
-	case ISNS_FUNC_SCN_DEREG_RSP:
-		break;
-	case ISNS_FUNC_SCN:
-		name = print_scn_pdu(hdr);
-		if (name) {
-			log_print(LOG_ERR, "%s %d: %s", __func__, __LINE__, name);
-			isns_attr_query(name);
-		}
-		break;
-	default:
-		print_unknown_pdu(hdr);
-	}
 
 	return 0;
 }

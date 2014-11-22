@@ -72,6 +72,8 @@ enum {
 
 const char *isns_function_get_abbr(uint16_t function);
 
+#define isns_function_is_rsp(fn) ((fn) & 0x8000)
+
 /* iSNSP flags (5.1.4) */
 #define ISNS_FLAG_CLIENT			(1U << 15)
 #define ISNS_FLAG_SERVER			(1U << 14)
