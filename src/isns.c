@@ -60,7 +60,7 @@ struct isns_portals_cache {
 
 static LIST_HEAD(query_list);
 static uint16_t scn_listen_port;
-static int isns_fd = -1;
+int isns_fd = -1;
 static int scn_listen_fd = -1;
 static int scn_fd = -1;
 static int registration_timer_fd = -1;
@@ -166,7 +166,7 @@ static int isns_portals_cache_add(struct isns_portals_cache *cache,
 	return 0;
 }
 
-static struct isns_query *isns_query_init(const char *name, uint16_t transaction)
+struct isns_query *isns_query_init(const char *name, uint16_t transaction)
 {
 	struct isns_query *query;
 
