@@ -5,7 +5,7 @@
  * SPDX-License-Identifier:	GPL-2.0+
  */
 
-#define _BSD_SOURCE
+#define _DEFAULT_SOURCE
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
