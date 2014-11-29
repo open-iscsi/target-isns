@@ -104,7 +104,7 @@ static bool signal_is_quit(int fd)
 {
 	struct signalfd_siginfo siginfo;
 
-	if (read(fd, &siginfo, sizeof(siginfo)) < sizeof(siginfo))
+	if (read(fd, &siginfo, sizeof(siginfo)) < (ssize_t) sizeof(siginfo))
 		return false;
 
 	if (siginfo.ssi_signo == SIGUSR1)
