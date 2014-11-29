@@ -90,11 +90,7 @@ static int signal_init(void)
 {
 	sigset_t mask;
 
-	sigemptyset(&mask);
-	sigaddset(&mask, SIGINT);
-	sigaddset(&mask, SIGQUIT);
-	sigaddset(&mask, SIGTERM);
-	sigaddset(&mask, SIGUSR1);
+	sigfillset(&mask);
 	sigprocmask(SIG_BLOCK, &mask, NULL);
 
 	return signalfd(-1, &mask, 0);
