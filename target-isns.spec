@@ -29,7 +29,7 @@ iSNS server.
 %build
 mkdir build
 cd build
-cmake -D CMAKE_INSTALL_PREFIX:PATH=/usr -DCMAKE_C_FLAGS="${RM_OPT_FLAGS}" ..
+cmake -D CMAKE_INSTALL_PREFIX:PATH=/usr -DCMAKE_C_FLAGS="${RPM_OPT_FLAGS}" ..
 %{__make}
 
 %install
