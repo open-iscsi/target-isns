@@ -10,6 +10,8 @@ URL:        https://github.com/cvubrugier/target-isns
 BuildRoot:  %{_tmppath}/%{name}-%{version}-build
 BuildRequires: gcc flex glibc-devel make
 BuildRequires: cmake
+BuildRequires: systemd
+%{?systemd_requires}
 
 %description
 Target-isns is an Internet Storage Name Service (iSNS) client for the
@@ -41,16 +43,16 @@ cd build
   rm -rf ${RPM_BUILD_ROOT}
 
 %post
-# nothing to do?
+%{service_add_post target-isns.service}
 
 %postun
-# nothing to do?
+%{service_del_postun target-isns.service}
 
 %pre
-# nothing to do?
+%{service_add_pre target-isns.service}
 
 %preun
-# nothing to do?
+%{service_del_preun target-isns.service}
 
 %files
 %defattr(-,root,root)
@@ -59,5 +61,6 @@ cd build
 %dir /usr/bin
 /usr/bin/target-isns
 %doc %{_mandir}/man8/target-isns.8.gz
+%{_unitdir}/target-isns.service
 
 %changelog
