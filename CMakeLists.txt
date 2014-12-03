@@ -11,10 +11,14 @@ set(PROJECT_VERSION "0.3")
 cmake_minimum_required(VERSION 2.8)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Werror -std=c99")
 
+option(SUPPORT_SYSTEMD "Support service control via systemd" OFF)
+
 add_subdirectory(src)
 install(FILES target-isns.conf DESTINATION /etc/)
 install(FILES target-isns.8 DESTINATION ${CMAKE_INSTALL_PREFIX}/share/man/man8/)
-install(FILES target-isns.service DESTINATION /usr/lib/systemd/system/)
+if (SUPPORT_SYSTEMD)
+  install(FILES target-isns.service DESTINATION /usr/lib/systemd/system/)
+endif (SUPPORT_SYSTEMD)
 
 set(ARCHIVE_NAME ${CMAKE_PROJECT_NAME}-${PROJECT_VERSION})
 add_custom_target(dist
