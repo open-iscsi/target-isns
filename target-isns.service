@@ -1,0 +1,13 @@
+[Unit]
+Description=iSNS client service for targetcli targets
+Documentation=man:target-isns(8)
+After=network.target network-online.target targetcli.service
+Requires=target.service
+BindsTo=target.service
+
+[Service] 
+Type=simple
+ExecStart=/usr/bin/target-isns -f
+
+[Install]
+WantedBy=remote-fs.target
