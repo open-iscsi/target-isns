@@ -39,6 +39,11 @@ variable:
 
     $ CC=clang cmake ..
 
+Target-isns supports systemd when the `SUPPORT_SYSTEMD` option is set
+at build time:
+
+    $ cmake -DSUPPORT_SYSTEMD=ON ..
+
 Configuration
 -------------
 
