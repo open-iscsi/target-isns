@@ -184,29 +184,29 @@ int main(int argc, char *argv[])
 	epoll_init_fds();
 	if (isns_init(config.isns_server, config.isns_port) == -1) {
 		log_print(LOG_ERR, "failed to initialize iSNS client");
-		goto quit;
+		goto err_init;
 	}
 
 	if ((epoll_fd = epoll_create1(0)) == -1) {
 		log_print(LOG_ERR, "failed to create epoll instance");
-		goto quit;
+		goto err_epoll_fd;
 	}
 
 	if ((ifd = configfs_init()) == -1) {
 		log_print(LOG_ERR, "failed to create inotify instance");
-		goto quit;
+		goto err_ifd;
 	}
 	epoll_set_fd(EPOLL_INOTIFY, ifd);
 
 	if ((tfd = isns_registration_timer_init()) == -1) {
 		log_print(LOG_ERR, "failed to create timerfd instance");
-		goto quit;
+		goto err_tfd;
 	}
 	epoll_set_fd(EPOLL_REGISTRATION_TIMER, tfd);
 
 	if ((sfd = signal_init()) == -1) {
 		log_print(LOG_ERR, "failed to create signalfd instance");
-		goto quit;
+		goto err_sfd;
 	}
 	epoll_set_fd(EPOLL_SIGNAL, sfd);
 
@@ -236,12 +236,16 @@ int main(int argc, char *argv[])
 quit:
 	isns_stop();
 	sleep(1);
-	configfs_cleanup();
-	isns_exit();
 	close(sfd);
+err_sfd:
 	close(tfd);
-	close(ifd);
+err_tfd:
+	configfs_cleanup(); /* closes ifd */
+err_ifd:
 	close(epoll_fd);
+err_epoll_fd:
+	isns_exit();
+err_init:
 	log_print(LOG_INFO, PROGNAME " stopped");
 	log_close();
 	if (daemon)
