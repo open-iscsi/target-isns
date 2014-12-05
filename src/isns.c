@@ -1078,6 +1078,11 @@ int isns_init(const char *addr, uint16_t isns_port)
 	char port[8];
 	struct addrinfo hints, *res;
 
+	if (!addr || addr[0] == '\0') {
+		log_print(LOG_ERR, "no iSNS server address given");
+		return -1;
+	}
+
 	log_print(LOG_INFO, "iSNS server is %s:%hu", addr, isns_port);
 
 	snprintf(port, sizeof(port), "%hu", isns_port);
