@@ -6,6 +6,7 @@
  */
 
 #define _DEFAULT_SOURCE
+#define _BSD_SOURCE
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stdio.h>
