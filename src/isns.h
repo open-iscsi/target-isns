@@ -10,7 +10,10 @@
 #include <inttypes.h>
 #include <stdbool.h>
 
+struct isns_query;
 struct target;
+
+struct isns_query *isns_query_init(const char *name, uint16_t transaction);
 
 int isns_handle(void);
 
