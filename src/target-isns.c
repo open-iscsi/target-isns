@@ -129,6 +129,7 @@ int main(int argc, char *argv[])
 	struct epoll_event events[EPOLL_MAX_FD];
 	ssize_t nr_events;
 	bool daemon = true;
+	int ret = EXIT_FAILURE;
 
 	conffile_read();
 
@@ -234,6 +235,7 @@ int main(int argc, char *argv[])
 	}
 
 quit:
+	ret = EXIT_SUCCESS;
 	isns_stop();
 	sleep(1);
 	close(sfd);
@@ -251,5 +253,5 @@ err_init:
 	if (daemon)
 		pidfile_remove();
 
-	return EXIT_SUCCESS;
+	return ret;
 }
