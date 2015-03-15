@@ -193,7 +193,7 @@ int main(int argc, char *argv[])
 		goto err_epoll_fd;
 	}
 
-	if ((ifd = configfs_init()) == -1) {
+	if ((ifd = configfs_inotify_init()) == -1) {
 		log_print(LOG_ERR, "failed to create inotify instance");
 		goto err_ifd;
 	}
@@ -222,7 +222,7 @@ int main(int argc, char *argv[])
 				if (signal_is_quit(fd))
 					goto quit;
 			} else if (fd == epoll_set[EPOLL_INOTIFY])
-				configfs_handle_events();
+				configfs_inotify_events_handle();
 			else if (fd == epoll_set[EPOLL_REGISTRATION_TIMER])
 				isns_registration_refresh();
 			else if (fd == epoll_set[EPOLL_ISNS])
@@ -242,7 +242,7 @@ quit:
 err_sfd:
 	close(tfd);
 err_tfd:
-	configfs_cleanup(); /* closes ifd */
+	configfs_inotify_cleanup(); /* closes ifd */
 err_ifd:
 	close(epoll_fd);
 err_epoll_fd:

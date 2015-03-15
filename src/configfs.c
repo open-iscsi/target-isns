@@ -301,7 +301,7 @@ static int configfs_target_update(struct target *tgt)
 	return 0;
 }
 
-int configfs_init(void)
+int configfs_inotify_init(void)
 {
 	DIR *iscsi_dir;
 	struct dirent *dirent;
@@ -350,7 +350,7 @@ out:
 	return -1;
 }
 
-void configfs_cleanup(void)
+void configfs_inotify_cleanup(void)
 {
 	struct target *tgt, *tgt_next;
 	struct tpg *tpg, *tpg_next;
@@ -405,7 +405,7 @@ static char inotify_event_str(const struct inotify_event *event)
 		return '?';
 }
 
-static void configfs_handle_target(const struct inotify_event *event)
+static void configfs_target_handle(const struct inotify_event *event)
 {
 	struct target *tgt = target_find(event->name);
 
@@ -423,7 +423,7 @@ static void configfs_handle_target(const struct inotify_event *event)
 		  inotify_event_str(event), event->name);
 }
 
-static void configfs_handle_tpg(const struct inotify_event *event)
+static void configfs_tpg_handle(const struct inotify_event *event)
 {
 	struct target *tgt;
 	struct tpg *tpg = NULL;
@@ -450,7 +450,7 @@ static void configfs_handle_tpg(const struct inotify_event *event)
 		  inotify_event_str(event), tgt->name, tpg_tag);
 }
 
-static void configfs_handle_tpg_subtree(const struct inotify_event *event)
+static void configfs_tpg_subtree_handle(const struct inotify_event *event)
 {
 	struct target *tgt;
 	struct tpg *tpg = NULL;
@@ -468,7 +468,7 @@ static void configfs_handle_tpg_subtree(const struct inotify_event *event)
 		  inotify_event_str(event), tgt->name, tpg->tag, event->name);
 }
 
-void configfs_handle_events(void)
+void configfs_inotify_events_handle(void)
 {
 	ssize_t nr;
 	char buf[INOTIFY_BUF_LEN];
@@ -498,12 +498,12 @@ void configfs_handle_events(void)
 		    streq(event->name, "param"))
 			; /* Discard this event */
 		else if (strstarts(event->name, "iqn."))
-			configfs_handle_target(event);
+			configfs_target_handle(event);
 		else if (strstarts(event->name, "tpgt_"))
-			configfs_handle_tpg(event);
+			configfs_tpg_handle(event);
 		else if (streq(event->name, "enable") ||
 			 get_portal(event->name, &af, ip_addr, &port) == 0)
-			configfs_handle_tpg_subtree(event);
+			configfs_tpg_subtree_handle(event);
 		else
 			log_print(LOG_DEBUG, "inotify[%c] %s unsupported",
 				  inotify_event_str(event), event->name);

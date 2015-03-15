@@ -44,12 +44,12 @@ struct portal {
 
 bool configfs_iscsi_path_exists(void);
 
-int configfs_init(void);
+int configfs_inotify_init(void);
 
-void configfs_cleanup(void);
+void configfs_inotify_cleanup(void);
 
 void configfs_show(void);
 
-void configfs_handle_events(void);
+void configfs_inotify_events_handle(void);
 
 struct target *target_find(const char *target_name);
