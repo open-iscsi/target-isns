@@ -27,7 +27,7 @@ void isns_stop(void);
 
 void isns_exit(void);
 
-void isns_target_register(const struct target *target);
+void isns_target_register_later(const struct target *target);
 
 void isns_target_deregister(const struct target *target);
 

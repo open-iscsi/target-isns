@@ -37,6 +37,7 @@ extern struct list_head targets;
 #define BUFSIZE (1 << 18)
 #define EID_NAME_KEY "eid"
 #define DEFAULT_REGISTRATION_PERIOD 300
+#define REGISTRATION_SETTLING_TIME 2
 #define ISNS_PORTALS_CACHE_MAX 32
 
 struct isns_io {
@@ -461,7 +462,7 @@ static void isns_ip_addr_set(const struct portal *portal, uint8_t *ip_addr)
 		inet_pton(AF_INET6, portal->ip_addr, ip_addr);
 }
 
-int isns_target_register(const struct target *target)
+static int isns_target_register(const struct target *target)
 {
 	char buf[4096];
 	uint16_t flags = 0, length = 0;
@@ -580,6 +581,26 @@ int isns_target_register(const struct target *target)
 		isns_scn_register();
 
 	return 0;
+}
+
+/*
+ * iSCSI targets are not registered as soon as they appear in configfs
+ * because some of their sub objects may be empty at the time.
+ * For instance, a target may show up before its TPG and default portal
+ * are created.
+ * As a consequence, a timer is used to provide a settling time that
+ * allows to register iSCSI targets later, when most of their
+ * properties are known.
+ */
+void isns_target_register_later(struct target *tgt)
+{
+	time_t expiration = itimer_get_expiration(registration_timer_fd);
+
+	if (expiration > REGISTRATION_SETTLING_TIME) {
+		/* The timer next expiration is too far; trigger it sooner. */
+		itimer_fire(registration_timer_fd, REGISTRATION_SETTLING_TIME);
+	}
+	tgt->registration_pending = true;
 }
 
 int isns_target_deregister(const struct target *target)
@@ -1054,11 +1075,26 @@ int isns_registration_timer_init(void)
 
 void isns_registration_refresh(void)
 {
+	struct target *tgt;
+	bool target_registered;
 	uint64_t count;
 
 	read(registration_timer_fd, &count, sizeof(count));
-	log_print(LOG_DEBUG, "refreshing registration");
-	isns_eid_attr_query();
+
+	target_registered = false;
+	list_for_each(&targets, tgt, list) {
+		if (tgt->registration_pending) {
+			isns_target_register(tgt);
+			tgt->registration_pending = false;
+			target_registered = true;
+		}
+	}
+
+	if (!target_registered) {
+		/* Registration period is close to expiration */
+		log_print(LOG_DEBUG, "refreshing registration");
+		isns_eid_attr_query();
+	}
 }
 
 static void isns_registration_set_period(uint32_t period)

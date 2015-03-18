@@ -19,6 +19,7 @@ struct target {
 	char name[ISCSI_NAME_SIZE];
 	struct list_head tpgs;
 	bool updated;
+	bool registration_pending;
 	int watch_fd;
 };
 

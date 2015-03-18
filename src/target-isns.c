@@ -193,17 +193,17 @@ int main(int argc, char *argv[])
 		goto err_epoll_fd;
 	}
 
-	if ((ifd = configfs_inotify_init()) == -1) {
-		log_print(LOG_ERR, "failed to create inotify instance");
-		goto err_ifd;
-	}
-	epoll_set_fd(EPOLL_INOTIFY, ifd);
-
 	if ((tfd = isns_registration_timer_init()) == -1) {
 		log_print(LOG_ERR, "failed to create timerfd instance");
 		goto err_tfd;
 	}
 	epoll_set_fd(EPOLL_REGISTRATION_TIMER, tfd);
+
+	if ((ifd = configfs_inotify_init()) == -1) {
+		log_print(LOG_ERR, "failed to create inotify instance");
+		goto err_ifd;
+	}
+	epoll_set_fd(EPOLL_INOTIFY, ifd);
 
 	if ((sfd = signal_init()) == -1) {
 		log_print(LOG_ERR, "failed to create signalfd instance");
@@ -240,10 +240,10 @@ quit:
 	sleep(1);
 	close(sfd);
 err_sfd:
-	close(tfd);
-err_tfd:
 	configfs_inotify_cleanup(); /* closes ifd */
 err_ifd:
+	close(tfd);
+err_tfd:
 	close(epoll_fd);
 err_epoll_fd:
 	isns_exit();

@@ -48,7 +48,7 @@
 #include "log.h"
 
 #define CONFIGFS_ISCSI_PATH	"/sys/kernel/config/target/iscsi"
-#define INOTIFY_MASK	       	(IN_CREATE | IN_DELETE | IN_MODIFY)
+#define INOTIFY_MASK		(IN_CREATE | IN_DELETE | IN_MODIFY)
 #define INOTIFY_BUF_LEN		(16 * (sizeof(struct inotify_event) + NAME_MAX + 1))
 
 
@@ -113,6 +113,7 @@ static struct target *configfs_target_init(const char *name)
 	strncpy(tgt->name, name, ISCSI_NAME_SIZE);
 	tgt->name[ISCSI_NAME_SIZE - 1] = '\0';
 	tgt->updated = false;
+	tgt->registration_pending = false;
 	tgt->watch_fd = inotify_add_watch(inotify_fd, path, INOTIFY_MASK);
 	list_head_init(&tgt->tpgs);
 	list_add_tail(&targets, &tgt->list);
@@ -412,7 +413,7 @@ static void configfs_target_handle(const struct inotify_event *event)
 	if ((event->mask & IN_CREATE) && !tgt) {
 		tgt = configfs_target_init(event->name);
 		configfs_target_update(tgt);
-		isns_target_register(tgt);
+		isns_target_register_later(tgt);
 	} else if ((event->mask & IN_DELETE) && tgt) {
 		isns_target_deregister(tgt);
 		list_del(&tgt->list);
@@ -446,6 +447,7 @@ static void configfs_tpg_handle(const struct inotify_event *event)
 		inotify_rm_watch(inotify_fd, tpg->watch_fd);
 		free(tpg);
 	}
+	isns_target_register_later(tgt);
 	log_print(LOG_DEBUG, "inotify[%c] %s/tpg%hu",
 		  inotify_event_str(event), tgt->name, tpg_tag);
 }
@@ -464,6 +466,7 @@ static void configfs_tpg_subtree_handle(const struct inotify_event *event)
 		return;
 
 	configfs_tpg_update(tgt, tpg);
+	isns_target_register_later(tgt);
 	log_print(LOG_DEBUG, "inotify[%c] %s/tpg%hu/%s",
 		  inotify_event_str(event), tgt->name, tpg->tag, event->name);
 }
