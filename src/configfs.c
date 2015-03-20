@@ -112,7 +112,7 @@ static struct target *configfs_target_init(const char *name)
 	snprintf(path, sizeof(path), CONFIGFS_ISCSI_PATH "/%s", name);
 	strncpy(tgt->name, name, ISCSI_NAME_SIZE);
 	tgt->name[ISCSI_NAME_SIZE - 1] = '\0';
-	tgt->updated = false;
+	tgt->exists = false;
 	tgt->registration_pending = false;
 	tgt->watch_fd = inotify_add_watch(inotify_fd, path, INOTIFY_MASK);
 	list_head_init(&tgt->tpgs);
@@ -154,7 +154,7 @@ static struct tpg *configfs_tpg_init(struct target *tgt, uint16_t tpg_tag)
 	tpg->np_watch_fd = inotify_add_watch(inotify_fd, np_path, INOTIFY_MASK);
 	tpg->tag = tpg_tag;
 	tpg->enabled = configfs_tpg_enabled(tgt, tpg_tag);
-	tpg->updated = false;
+	tpg->exists = false;
 	list_head_init(&tpg->portals);
 	list_add(&tgt->tpgs, &tpg->list);
 
@@ -199,7 +199,7 @@ static struct portal *configfs_portal_init(struct tpg *tpg, int af,
 	strncpy(portal->ip_addr, ip_addr, INET6_ADDRSTRLEN);
 	portal->ip_addr[INET6_ADDRSTRLEN - 1] = '\0';
 	portal->port = port;
-	portal->updated = false;
+	portal->exists = false;
 	list_add(&tpg->portals, &portal->list);
 
 	return portal;
@@ -222,7 +222,7 @@ static int configfs_tpg_update(struct target *tgt, struct tpg *tpg)
 	tpg->enabled = configfs_tpg_enabled(tgt, tpg->tag);
 
 	list_for_each(&tpg->portals, portal, list) {
-		portal->updated = false;
+		portal->exists = false;
 	}
 
 	while ((dirent = readdir(np_dir))) {
@@ -244,18 +244,18 @@ static int configfs_tpg_update(struct target *tgt, struct tpg *tpg)
 
 		if (!portal)
 			portal = configfs_portal_init(tpg, af, ip_addr, port);
-		portal->updated = true;
+		portal->exists = true;
 	}
 	closedir(np_dir);
 
 	list_for_each_safe(&tpg->portals, portal, portal_next, list) {
-		if (portal->updated)
+		if (portal->exists)
 			continue;
 
 		list_del(&portal->list);
 		free(portal);
 	}
-	tpg->updated = true;
+	tpg->exists = true;
 
 	return 0;
 }
@@ -274,7 +274,7 @@ static int configfs_target_update(struct target *tgt)
 		return -ENOENT;
 
 	list_for_each(&tgt->tpgs, tpg, list) {
-		tpg->updated = false;
+		tpg->exists = false;
 	}
 
 	while ((dirent = readdir(tgt_dir))) {
@@ -291,13 +291,13 @@ static int configfs_target_update(struct target *tgt)
 	closedir(tgt_dir);
 
 	list_for_each_safe(&tgt->tpgs, tpg, tpg_next, list) {
-		if (tpg->updated)
+		if (tpg->exists)
 			continue;
 
 		list_del(&tpg->list);
 		free(tpg);
 	}
-	tgt->updated = true;
+	tgt->exists = true;
 
 	return 0;
 }
@@ -319,7 +319,7 @@ int configfs_inotify_init(void)
 		goto out;
 
 	list_for_each(&targets, tgt, list) {
-		tgt->updated = false;
+		tgt->exists = false;
 	}
 
 	while ((dirent = readdir(iscsi_dir))) {
@@ -334,7 +334,7 @@ int configfs_inotify_init(void)
 	closedir(iscsi_dir);
 
 	list_for_each_safe(&targets, tgt, tgt_next, list) {
-		if (tgt->updated)
+		if (tgt->exists)
 			continue;
 
 		list_del(&tgt->list);

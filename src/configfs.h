@@ -18,7 +18,7 @@ struct target {
 	struct list_node list;
 	char name[ISCSI_NAME_SIZE];
 	struct list_head tpgs;
-	bool updated;
+	bool exists;
 	bool registration_pending;
 	int watch_fd;
 };
@@ -28,7 +28,7 @@ struct tpg {
 	uint16_t tag;
 	bool enabled;
 	struct list_head portals;
-	bool updated;
+	bool exists;
 	int watch_fd;
 	int np_watch_fd;
 };
@@ -38,7 +38,7 @@ struct portal {
 	int af;
 	char ip_addr[INET6_ADDRSTRLEN];
 	uint16_t port;
-	bool updated;
+	bool exists;
 };
 
 #define ALL_TARGETS ((struct target*) 1)
