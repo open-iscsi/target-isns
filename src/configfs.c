@@ -489,7 +489,6 @@ void configfs_inotify_events_handle(void)
 	}
 	for (p = buf; p < buf + nr; ) {
 		event = (struct inotify_event*) p;
-		p += sizeof(struct inotify_event) + event->len;
 
 		if (event->name[0] == '\0' ||
 		    streq(event->name, "acls") ||
@@ -510,6 +509,8 @@ void configfs_inotify_events_handle(void)
 		else
 			log_print(LOG_DEBUG, "inotify[%c] %s unsupported",
 				  inotify_event_str(event), event->name);
+
+		p += sizeof(struct inotify_event) + event->len;
 	}
 }
 
