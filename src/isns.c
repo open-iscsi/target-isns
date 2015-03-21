@@ -1079,7 +1079,8 @@ void isns_registration_refresh(void)
 	bool target_registered;
 	uint64_t count;
 
-	read(registration_timer_fd, &count, sizeof(count));
+	if (read(registration_timer_fd, &count, sizeof(count)) == -1)
+		return;
 
 	target_registered = false;
 	list_for_each(&targets, tgt, list) {
