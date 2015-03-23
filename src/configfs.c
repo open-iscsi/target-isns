@@ -207,6 +207,7 @@ static struct portal *configfs_portal_init(int af, const char *ip_addr, uint16_t
 	strncpy(portal->ip_addr, ip_addr, INET6_ADDRSTRLEN);
 	portal->ip_addr[INET6_ADDRSTRLEN - 1] = '\0';
 	portal->port = port;
+	portal->registered = false;
 	list_add(&portals, &portal->node);
 
 	return portal;

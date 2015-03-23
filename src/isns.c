@@ -437,6 +437,46 @@ static void isns_ip_addr_set(const struct portal *portal, uint8_t *ip_addr)
 		inet_pton(AF_INET6, portal->ip_addr, ip_addr);
 }
 
+static void isns_ip_addr_get(const uint8_t *ip_addr, int *af, char *ip_str)
+{
+	size_t start;
+
+	start = 12;
+	*af = AF_INET;
+	for (size_t i = 0; i < 12; i++) {
+		if ((i <  10 && ip_addr[i] != 0x00) ||
+		    (i >= 10 && ip_addr[i] != 0xFF)) {
+			start = 0;
+			*af = AF_INET6;
+			break;
+		}
+	}
+	inet_ntop(*af, &ip_addr[start], ip_str, INET6_ADDRSTRLEN);
+}
+
+static void isns_portals_set_registered(uint8_t *ip_addr, uint32_t port)
+{
+	int af;
+	char ip_str[INET6_ADDRSTRLEN];
+	struct portal *portal;
+
+	isns_ip_addr_get(ip_addr, &af, ip_str);
+	portal = portal_find(af, ip_str, port);
+	if (portal)
+		portal->registered = true;
+
+	/*
+	 * If the IP address is the local IP address, also mark the
+	 * default portal as registered.
+	 */
+	if (memcmp(ip_addr, ip, 16) == 0) {
+		strncpy(ip_str, af == AF_INET ? "0.0.0.0" : "::", INET6_ADDRSTRLEN);
+		portal = portal_find(af, ip_str, port);
+		if (portal)
+			portal->registered = true;
+	}
+}
+
 static int isns_target_register(const struct target *target)
 {
 	char buf[4096];
@@ -486,6 +526,9 @@ static int isns_target_register(const struct target *target)
 	/* Register the portals. */
 	list_for_each(&portals, portal, node) {
 		if (!tgt_has_portal(target, portal) && !all_targets)
+			continue;
+
+		if (portal->registered)
 			continue;
 
 		uint32_t port = htonl(portal->port);
@@ -759,6 +802,8 @@ static void isns_rsp_handle(const struct isns_hdr *hdr)
 	uint32_t status = ntohl(hdr->pdu[0]);
 	struct isns_query *query;
 	char *name = NULL;
+	uint8_t ip_addr[16];
+	uint32_t port;
 	uint32_t period;
 
 	query = isns_query_pop(transaction);
@@ -837,6 +882,18 @@ static void isns_rsp_handle(const struct isns_hdr *hdr)
 				}
 			} else
 				name = NULL;
+			break;
+		case ISNS_ATTR_PORTAL_IP_ADDRESS:
+			if (vlen == 16)
+				memcpy(ip_addr, tlv->value, 16);
+			else
+				memset(ip_addr, 0, 16);
+			break;
+		case ISNS_ATTR_PORTAL_PORT:
+			if (vlen == 4) {
+				port = ntohl(*(tlv->value));
+				isns_portals_set_registered(ip_addr, port);
+			}
 			break;
 		default:
 			name = NULL;

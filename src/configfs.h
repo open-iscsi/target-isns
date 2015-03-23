@@ -37,6 +37,7 @@ struct portal {
 	int af;
 	char ip_addr[INET6_ADDRSTRLEN];
 	uint16_t port;
+	bool registered;
 };
 
 #define ALL_TARGETS ((struct target*) 1)
