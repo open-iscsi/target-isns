@@ -15,7 +15,7 @@
 #include "isns_proto.h"
 
 struct target {
-	struct list_node list;
+	struct list_node node;  /* Member of the global "targets" list */
 	char name[ISCSI_NAME_SIZE];
 	struct list_head tpgs;
 	bool exists;
@@ -24,7 +24,7 @@ struct target {
 };
 
 struct tpg {
-	struct list_node list;
+	struct list_node node;  /* Member of a target->tpg list */
 	uint16_t tag;
 	bool enabled;
 	struct list_head portals;
@@ -34,7 +34,7 @@ struct tpg {
 };
 
 struct portal {
-	struct list_node list;
+	struct list_node node;  /* Member of a tpg->portals list */
 	int af;
 	char ip_addr[INET6_ADDRSTRLEN];
 	uint16_t port;

@@ -48,7 +48,7 @@ struct isns_io {
 struct isns_query {
 	char name[ISCSI_NAME_SIZE];
 	uint16_t transaction;
-	struct list_node list;
+	struct list_node node;
 };
 
 struct isns_portals_cache {
@@ -131,7 +131,7 @@ static char *isns_source_attribute_get(void)
 		log_print(LOG_DEBUG, "source attribute cleared");
 	} else if (source_attribute[0] == '\0' ||
 		   !target_find(source_attribute)) {
-		target = list_top(&targets, struct target, list);
+		target = list_top(&targets, struct target, node);
 		strncpy(source_attribute, target->name, ISCSI_NAME_SIZE);
 		source_attribute[ISCSI_NAME_SIZE - 1] = '\0';
 		log_print(LOG_DEBUG, "source attribute set to %s",
@@ -175,7 +175,7 @@ struct isns_query *isns_query_init(const char *name, uint16_t transaction)
 		strncpy(query->name, name, ISCSI_NAME_SIZE);
 		query->name[ISCSI_NAME_SIZE - 1] = '\0';
 		query->transaction = transaction;
-		list_add(&query_list, &query->list);
+		list_add(&query_list, &query->node);
 	}
 
 	return query;
@@ -185,9 +185,9 @@ static struct isns_query *isns_query_pop(uint16_t transaction)
 {
 	struct isns_query *query, *query_next;
 
-	list_for_each_safe(&query_list, query, query_next, list) {
+	list_for_each_safe(&query_list, query, query_next, node) {
 		if (query->transaction == transaction) {
-			list_del(&query->list);
+			list_del(&query->node);
 			return query;
 		}
 	}
@@ -335,7 +335,7 @@ static int isns_scn_register(void)
 	memset(buf, 0, sizeof(buf));
 	tlv = (struct isns_tlv *) hdr->pdu;
 
-	target = list_top(&targets, struct target, list);
+	target = list_top(&targets, struct target, node);
 
 	length += isns_tlv_set_string(&tlv, ISNS_ATTR_ISCSI_NAME, target->name);
 	length += isns_tlv_set_string(&tlv, ISNS_ATTR_ISCSI_NAME, target->name);
@@ -482,7 +482,7 @@ static int isns_target_register(const struct target *target)
 	if (all_targets) {
 		if (list_empty(&targets))
 			return 0;
-		target = list_top(&targets, struct target, list);
+		target = list_top(&targets, struct target, node);
 	}
 
 	if (isns_fd == -1 && isns_connect() < 0)
@@ -516,13 +516,13 @@ static int isns_target_register(const struct target *target)
 	 *  Operating Attributes of a message."
 	 */
 	isns_portals_cache_init(&portals_cache);
-	list_for_each(&targets, tgt, list) {
+	list_for_each(&targets, tgt, node) {
 		if (tgt != target && !all_targets)
 			continue;
 
 		/* Add the portals to the cache. */
-		list_for_each(&tgt->tpgs, tpg, list) {
-			list_for_each(&tpg->portals, portal, list) {
+		list_for_each(&tgt->tpgs, tpg, node) {
+			list_for_each(&tpg->portals, portal, node) {
 				uint8_t ip_addr[16];
 				uint32_t port = htonl(portal->port);
 
@@ -540,7 +540,7 @@ static int isns_target_register(const struct target *target)
 				       4, &portals_cache.portals[i].port);
 	}
 
-	list_for_each(&targets, tgt, list) {
+	list_for_each(&targets, tgt, node) {
 		if (tgt != target && !all_targets)
 			continue;
 
@@ -551,12 +551,12 @@ static int isns_target_register(const struct target *target)
 				       sizeof(node), &node);
 
 		/* Register the TPGs. */
-		list_for_each(&tgt->tpgs, tpg, list) {
+		list_for_each(&tgt->tpgs, tpg, node) {
 			uint32_t tag = htonl(tpg->tag);
 
 			length += isns_tlv_set(&tlv, ISNS_ATTR_PG_TAG,
 					       sizeof(tag), &tag);
-			list_for_each(&tpg->portals, portal, list) {
+			list_for_each(&tpg->portals, portal, node) {
 				uint8_t ip_addr[16];
 				uint32_t port = htonl(portal->port);
 
@@ -1083,7 +1083,7 @@ void isns_registration_refresh(void)
 		return;
 
 	target_registered = false;
-	list_for_each(&targets, tgt, list) {
+	list_for_each(&targets, tgt, node) {
 		if (tgt->registration_pending) {
 			isns_target_register(tgt);
 			tgt->registration_pending = false;

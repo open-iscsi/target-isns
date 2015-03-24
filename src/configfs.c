@@ -71,7 +71,7 @@ static struct target *target_find_by_watch(int watch_fd)
 {
 	struct target *tgt;
 
-	list_for_each(&targets, tgt, list) {
+	list_for_each(&targets, tgt, node) {
 		if (tgt->watch_fd == watch_fd)
 			return tgt;
 	}
@@ -82,7 +82,7 @@ static struct tpg *tpg_find_by_tag(const struct target *tgt, uint16_t tpg_tag)
 {
 	struct tpg *tpg;
 
-	list_for_each(&tgt->tpgs, tpg, list) {
+	list_for_each(&tgt->tpgs, tpg, node) {
 		if (tpg->tag == tpg_tag)
 			return tpg;
 	}
@@ -93,7 +93,7 @@ static struct tpg *tpg_find_by_watch(const struct target *tgt, int watch_fd)
 {
 	struct tpg *tpg;
 
-	list_for_each(&tgt->tpgs, tpg, list) {
+	list_for_each(&tgt->tpgs, tpg, node) {
 		if (tpg->watch_fd == watch_fd ||
 		    tpg->np_watch_fd == watch_fd)
 			return tpg;
@@ -116,7 +116,7 @@ static struct target *configfs_target_init(const char *name)
 	tgt->registration_pending = false;
 	tgt->watch_fd = inotify_add_watch(inotify_fd, path, INOTIFY_MASK);
 	list_head_init(&tgt->tpgs);
-	list_add_tail(&targets, &tgt->list);
+	list_add_tail(&targets, &tgt->node);
 
 	return tgt;
 }
@@ -156,7 +156,7 @@ static struct tpg *configfs_tpg_init(struct target *tgt, uint16_t tpg_tag)
 	tpg->enabled = configfs_tpg_enabled(tgt, tpg_tag);
 	tpg->exists = false;
 	list_head_init(&tpg->portals);
-	list_add(&tgt->tpgs, &tpg->list);
+	list_add(&tgt->tpgs, &tpg->node);
 
 	return tpg;
 }
@@ -200,7 +200,7 @@ static struct portal *configfs_portal_init(struct tpg *tpg, int af,
 	portal->ip_addr[INET6_ADDRSTRLEN - 1] = '\0';
 	portal->port = port;
 	portal->exists = false;
-	list_add(&tpg->portals, &portal->list);
+	list_add(&tpg->portals, &portal->node);
 
 	return portal;
 }
@@ -221,7 +221,7 @@ static int configfs_tpg_update(struct target *tgt, struct tpg *tpg)
 
 	tpg->enabled = configfs_tpg_enabled(tgt, tpg->tag);
 
-	list_for_each(&tpg->portals, portal, list) {
+	list_for_each(&tpg->portals, portal, node) {
 		portal->exists = false;
 	}
 
@@ -237,7 +237,7 @@ static int configfs_tpg_update(struct target *tgt, struct tpg *tpg)
 
 		struct portal *p;
 		portal = NULL;
-		list_for_each(&tpg->portals, p, list) {
+		list_for_each(&tpg->portals, p, node) {
 			if (streq(p->ip_addr, ip_addr) && p->port == port)
 				portal = p;
 		}
@@ -248,11 +248,11 @@ static int configfs_tpg_update(struct target *tgt, struct tpg *tpg)
 	}
 	closedir(np_dir);
 
-	list_for_each_safe(&tpg->portals, portal, portal_next, list) {
+	list_for_each_safe(&tpg->portals, portal, portal_next, node) {
 		if (portal->exists)
 			continue;
 
-		list_del(&portal->list);
+		list_del(&portal->node);
 		free(portal);
 	}
 	tpg->exists = true;
@@ -273,7 +273,7 @@ static int configfs_target_update(struct target *tgt)
 	if (!tgt_dir)
 		return -ENOENT;
 
-	list_for_each(&tgt->tpgs, tpg, list) {
+	list_for_each(&tgt->tpgs, tpg, node) {
 		tpg->exists = false;
 	}
 
@@ -290,11 +290,11 @@ static int configfs_target_update(struct target *tgt)
 	}
 	closedir(tgt_dir);
 
-	list_for_each_safe(&tgt->tpgs, tpg, tpg_next, list) {
+	list_for_each_safe(&tgt->tpgs, tpg, tpg_next, node) {
 		if (tpg->exists)
 			continue;
 
-		list_del(&tpg->list);
+		list_del(&tpg->node);
 		free(tpg);
 	}
 	tgt->exists = true;
@@ -318,7 +318,7 @@ int configfs_inotify_init(void)
 	if (!iscsi_dir)
 		goto out;
 
-	list_for_each(&targets, tgt, list) {
+	list_for_each(&targets, tgt, node) {
 		tgt->exists = false;
 	}
 
@@ -333,11 +333,11 @@ int configfs_inotify_init(void)
 	}
 	closedir(iscsi_dir);
 
-	list_for_each_safe(&targets, tgt, tgt_next, list) {
+	list_for_each_safe(&targets, tgt, tgt_next, node) {
 		if (tgt->exists)
 			continue;
 
-		list_del(&tgt->list);
+		list_del(&tgt->node);
 		inotify_rm_watch(inotify_fd, tgt->watch_fd);
 		free(tgt);
 	}
@@ -357,18 +357,18 @@ void configfs_inotify_cleanup(void)
 	struct tpg *tpg, *tpg_next;
 	struct portal *portal, *portal_next;
 
-	list_for_each_safe(&targets, tgt, tgt_next, list) {
-		list_for_each_safe(&tgt->tpgs, tpg, tpg_next, list) {
-			list_for_each_safe(&tpg->portals, portal, portal_next, list) {
-				list_del(&portal->list);
+	list_for_each_safe(&targets, tgt, tgt_next, node) {
+		list_for_each_safe(&tgt->tpgs, tpg, tpg_next, node) {
+			list_for_each_safe(&tpg->portals, portal, portal_next, node) {
+				list_del(&portal->node);
 				free(portal);
 			}
-			list_del(&tpg->list);
+			list_del(&tpg->node);
 			inotify_rm_watch(inotify_fd, tpg->watch_fd);
 			inotify_rm_watch(inotify_fd, tpg->np_watch_fd);
 			free(tpg);
 		}
-		list_del(&tgt->list);
+		list_del(&tgt->node);
 		inotify_rm_watch(inotify_fd, tgt->watch_fd);
 		free(tgt);
 	}
@@ -381,12 +381,12 @@ void configfs_show(void)
 	struct tpg *tpg;
 	struct portal *portal;
 
-	list_for_each(&targets, tgt, list) {
+	list_for_each(&targets, tgt, node) {
 		log_print(LOG_DEBUG, "target: name = %s", tgt->name);
-		list_for_each(&tgt->tpgs, tpg, list) {
+		list_for_each(&tgt->tpgs, tpg, node) {
 			log_print(LOG_DEBUG, "  tpg: tag = %hu, enabled = %d",
 				  tpg->tag, tpg->enabled);
-			list_for_each(&tpg->portals, portal, list) {
+			list_for_each(&tpg->portals, portal, node) {
 				log_print(LOG_DEBUG, "    portal: af = IPv%d, ip_addr = %s, port = %hu",
 					  portal->af == AF_INET ? 4 : 6, portal->ip_addr, portal->port);
 			}
@@ -416,7 +416,7 @@ static void configfs_target_handle(const struct inotify_event *event)
 		isns_target_register_later(tgt);
 	} else if ((event->mask & IN_DELETE) && tgt) {
 		isns_target_deregister(tgt);
-		list_del(&tgt->list);
+		list_del(&tgt->node);
 		inotify_rm_watch(inotify_fd, tgt->watch_fd);
 		free(tgt);
 	}
@@ -443,7 +443,7 @@ static void configfs_tpg_handle(const struct inotify_event *event)
 		tpg = configfs_tpg_init(tgt, tpg_tag);
 		configfs_tpg_update(tgt, tpg);
 	} else if ((event->mask & IN_DELETE) && tpg) {
-		list_del(&tpg->list);
+		list_del(&tpg->node);
 		inotify_rm_watch(inotify_fd, tpg->watch_fd);
 		free(tpg);
 	}
@@ -457,7 +457,7 @@ static void configfs_tpg_subtree_handle(const struct inotify_event *event)
 	struct target *tgt;
 	struct tpg *tpg = NULL;
 
-	list_for_each(&targets, tgt, list) {
+	list_for_each(&targets, tgt, node) {
 		tpg = tpg_find_by_watch(tgt, event->wd);
 		if (tpg)
 			break;
@@ -518,7 +518,7 @@ struct target *target_find(const char *target_name)
 {
 	struct target *tgt;
 
-	list_for_each(&targets, tgt, list) {
+	list_for_each(&targets, tgt, node) {
 		if (streq(tgt->name, target_name))
 			return tgt;
 	}
