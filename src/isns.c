@@ -33,6 +33,7 @@
 
 extern void isns_set_fd(int isns, int scn_listen, int scn);
 extern struct list_head targets;
+extern struct list_head portals;
 
 #define BUFSIZE (1 << 18)
 #define EID_NAME_KEY "eid"
@@ -139,32 +140,6 @@ static char *isns_source_attribute_get(void)
 	}
 
 	return source_attribute;
-}
-
-static void isns_portals_cache_init(struct isns_portals_cache *cache)
-{
-	memset(cache, 0, sizeof(struct isns_portals_cache));
-}
-
-static int isns_portals_cache_add(struct isns_portals_cache *cache,
-				  const uint8_t *ip_addr,
-				  uint32_t port)
-{
-	for (size_t i = 0; i < cache->nr_portals; i++)
-		if (memcmp(cache->portals[i].ip_addr, ip_addr, 16) == 0 ||
-		    cache->portals[i].port == port)
-			return -1;
-
-	if (cache->nr_portals >= ISNS_PORTALS_CACHE_MAX) {
-		log_print(LOG_ERR, "portals cache is full");
-		return -1;
-	}
-
-	memcpy(cache->portals[cache->nr_portals].ip_addr, ip_addr, 16);
-	cache->portals[cache->nr_portals].port = port;
-	cache->nr_portals++;
-
-	return 0;
 }
 
 struct isns_query *isns_query_init(const char *name, uint16_t transaction)
@@ -471,7 +446,6 @@ static int isns_target_register(const struct target *target)
 	struct target *tgt;
 	struct tpg *tpg;
 	struct portal *portal;
-	struct isns_portals_cache portals_cache;
 	uint32_t node = htonl(ISNS_NODE_TARGET);
 	uint32_t protocol = htonl(ISNS_ENTITY_PROTOCOL_ISCSI);
 	uint32_t period = htonl(DEFAULT_REGISTRATION_PERIOD);
@@ -509,35 +483,17 @@ static int isns_target_register(const struct target *target)
 	length += isns_tlv_set(&tlv, ISNS_ATTR_REGISTRATION_PERIOD,
 			       sizeof(period), &period);
 
-	/*
-	 * Build a cache of portals (without duplicates).
-	 * RFC 4171: 5.6.5.1. Device Attribute Registration Request
-	 * "A given object may only appear a maximum of once in the
-	 *  Operating Attributes of a message."
-	 */
-	isns_portals_cache_init(&portals_cache);
-	list_for_each(&targets, tgt, node) {
-		if (tgt != target && !all_targets)
+	/* Register the portals. */
+	list_for_each(&portals, portal, node) {
+		if (!tgt_has_portal(target, portal) && !all_targets)
 			continue;
 
-		/* Add the portals to the cache. */
-		list_for_each(&tgt->tpgs, tpg, node) {
-			list_for_each(&tpg->portals, portal, node) {
-				uint8_t ip_addr[16];
-				uint32_t port = htonl(portal->port);
+		uint32_t port = htonl(portal->port);
+		uint8_t ip_addr[16];
+		isns_ip_addr_set(portal, ip_addr);
 
-				isns_ip_addr_set(portal, ip_addr);
-				isns_portals_cache_add(&portals_cache, ip_addr, port);
-			}
-		}
-	}
-
-	/* Register the portals. */
-	for (size_t i = 0; i < portals_cache.nr_portals; i++) {
-		length += isns_tlv_set(&tlv, ISNS_ATTR_PORTAL_IP_ADDRESS,
-				       16, &portals_cache.portals[i].ip_addr);
-		length += isns_tlv_set(&tlv, ISNS_ATTR_PORTAL_PORT,
-				       4, &portals_cache.portals[i].port);
+		length += isns_tlv_set(&tlv, ISNS_ATTR_PORTAL_IP_ADDRESS, 16, ip_addr);
+		length += isns_tlv_set(&tlv, ISNS_ATTR_PORTAL_PORT, 4, &port);
 	}
 
 	list_for_each(&targets, tgt, node) {
@@ -556,11 +512,15 @@ static int isns_target_register(const struct target *target)
 
 			length += isns_tlv_set(&tlv, ISNS_ATTR_PG_TAG,
 					       sizeof(tag), &tag);
-			list_for_each(&tpg->portals, portal, node) {
-				uint8_t ip_addr[16];
-				uint32_t port = htonl(portal->port);
 
+			list_for_each(&portals, portal, node) {
+				if (!tpg_has_portal(tpg, portal))
+					continue;
+
+				uint32_t port = htonl(portal->port);
+				uint8_t ip_addr[16];
 				isns_ip_addr_set(portal, ip_addr);
+
 				length += isns_tlv_set(&tlv, ISNS_ATTR_PG_PORTAL_IP_ADDRESS,
 						       sizeof(ip_addr), &ip_addr);
 				length += isns_tlv_set(&tlv, ISNS_ATTR_PG_PORTAL_PORT,
