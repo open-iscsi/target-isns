@@ -510,8 +510,8 @@ static int isns_target_register(const struct target *target)
 		list_for_each(&tgt->tpgs, tpg, node) {
 			uint32_t tag = htonl(tpg->tag);
 
-			length += isns_tlv_set(&tlv, ISNS_ATTR_PG_TAG,
-					       sizeof(tag), &tag);
+			length += isns_tlv_set_string(&tlv, ISNS_ATTR_PG_ISCSI_NAME,
+						      tgt->name);
 
 			list_for_each(&portals, portal, node) {
 				if (!tpg_has_portal(tpg, portal))
@@ -526,6 +526,8 @@ static int isns_target_register(const struct target *target)
 				length += isns_tlv_set(&tlv, ISNS_ATTR_PG_PORTAL_PORT,
 						       sizeof(port), &port);
 			}
+			length += isns_tlv_set(&tlv, ISNS_ATTR_PG_TAG,
+					       sizeof(tag), &tag);
 		}
 	}
 
