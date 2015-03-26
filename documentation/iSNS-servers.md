@@ -55,5 +55,10 @@ following requirement from RFC 4171:
   "A given object may only appear a maximum of once in the Operating
    Attributes of a message"
 
+Moreover, the Microsoft iSNS server returns an "invalid update" error
+if a DevAttrReg request registers a portal that was already registered
+by a previous DevAttrReg request.
+
 The OpenIndiana iSNS server has no problem with duplicate portals in a
-DevAttrReg message.
+DevAttrReg message or repetitive registration of a portal by several
+DevAttrReg messages.
