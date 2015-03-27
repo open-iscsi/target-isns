@@ -471,6 +471,7 @@ static void isns_portals_set_registered(uint8_t *ip_addr, uint32_t port)
 	 */
 	if (memcmp(ip_addr, ip, 16) == 0) {
 		strncpy(ip_str, af == AF_INET ? "0.0.0.0" : "::", INET6_ADDRSTRLEN);
+		ip_str[INET6_ADDRSTRLEN - 1] = '\0';
 		portal = portal_find(af, ip_str, port);
 		if (portal)
 			portal->registered = true;
