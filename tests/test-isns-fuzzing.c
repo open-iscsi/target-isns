@@ -24,7 +24,9 @@
 
 extern int isns_fd;
 
-void isns_set_fd(int isns, int scn_listen, int scn)
+void isns_set_fd(int isns __attribute__((unused)),
+		 int scn_listen __attribute__((unused)),
+		 int scn __attribute__((unused)))
 {
 }
 
