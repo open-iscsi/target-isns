@@ -188,6 +188,7 @@ static int get_portal(const char *str, int *af, char *ip_addr, uint16_t *port)
 		*af = AF_INET6;
 		str++;
 		p = strchr(str, ']');
+		assert(p);
 		*p = '\0';
 	} else
 		*af = AF_INET;
