@@ -35,6 +35,7 @@
 
 #include <ccan/list/list.h>
 #include <ccan/str/str.h>
+#include <assert.h>
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -202,6 +203,8 @@ static int get_portal(const char *str, int *af, char *ip_addr, uint16_t *port)
 static struct portal *configfs_portal_init(int af, const char *ip_addr, uint16_t port)
 {
 	struct portal *portal = malloc(sizeof(struct portal));
+	if (!portal)
+		return NULL;
 
 	portal->af = af;
 	strncpy(portal->ip_addr, ip_addr, INET6_ADDRSTRLEN);
@@ -217,6 +220,8 @@ static struct tpg_portal *configfs_tpg_portal_init(struct tpg *tpg,
 						   struct portal *portal)
 {
 	struct tpg_portal *tpg_portal = malloc(sizeof(struct tpg_portal));
+	if (!tpg_portal)
+		return NULL;
 
 	tpg_portal->tpg = tpg;
 	tpg_portal->portal = portal;
@@ -264,12 +269,16 @@ static int configfs_tpg_update(struct target *tgt, struct tpg *tpg)
 			continue;
 
 		struct portal *portal = portal_find(af, ip_addr, port);
-		if (!portal)
+		if (!portal) {
 			portal = configfs_portal_init(af, ip_addr, port);
+			assert(portal);
+		}
 
 		struct tpg_portal *tpg_portal = configfs_tpg_portal_find(tpg, portal);
-		if (!tpg_portal)
+		if (!tpg_portal) {
 			tpg_portal = configfs_tpg_portal_init(tpg, portal);
+			assert(tpg_portal);
+		}
 	}
 	closedir(np_dir);
 
