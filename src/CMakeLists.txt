@@ -7,6 +7,9 @@
 
 include_directories(".")
 
+configure_file(version.h.in version.h @ONLY)
+include_directories(${CMAKE_CURRENT_BINARY_DIR})
+
 add_library(ccan STATIC
   ccan/daemonize/daemonize.c
   ccan/list/list.c)

@@ -7,4 +7,4 @@
 
 #pragma once
 
-#define VERSION "0.5"
+#cmakedefine TARGET_ISNS_VERSION "@TARGET_ISNS_VERSION@"

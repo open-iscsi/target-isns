@@ -153,7 +153,7 @@ int main(int argc, char *argv[])
 			daemon = false;
 			break;
 		case 'v':
-			printf(PROGNAME " version " VERSION "\n");
+			printf(PROGNAME " version " TARGET_ISNS_VERSION "\n");
 			exit(EXIT_SUCCESS);
 			break;
 		case 'h':
@@ -180,7 +180,7 @@ int main(int argc, char *argv[])
 	}
 
 	log_init(PROGNAME, daemon, config.log_level);
-	log_print(LOG_INFO, PROGNAME " version " VERSION " started");
+	log_print(LOG_INFO, PROGNAME " version " TARGET_ISNS_VERSION " started");
 
 	epoll_init_fds();
 	if (isns_init(config.isns_server, config.isns_port) == -1) {
