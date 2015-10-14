@@ -79,7 +79,6 @@ static int isns_get_ip(int fd)
 {
 	int err;
 	size_t i;
-	uint32_t addr;
 	union {
 		struct sockaddr s;
 		struct sockaddr_storage ss;
@@ -106,13 +105,8 @@ static int isns_get_ip(int fd)
 
 	switch (l.ss.ss_family) {
 	case AF_INET:
-		addr = ((&l.s4)->sin_addr.s_addr);
-
 		ip[10] = ip[11] = 0xff;
-		ip[15] = 0xff & (addr >> 24);
-		ip[14] = 0xff & (addr >> 16);
-		ip[13] = 0xff & (addr >> 8);
-		ip[12] = 0xff & addr;
+		memcpy(ip + 12, &((&l.s4)->sin_addr), 4);
 		break;
 	case AF_INET6:
 		for (i = 0; i < ARRAY_SIZE(ip); i++)
