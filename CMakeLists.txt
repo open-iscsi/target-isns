@@ -22,7 +22,7 @@ endif (SUPPORT_SYSTEMD)
 
 add_subdirectory(tests)
 
-set(ARCHIVE_NAME ${CMAKE_PROJECT_NAME}-${PROJECT_VERSION})
+set(ARCHIVE_NAME ${CMAKE_PROJECT_NAME}-${TARGET_ISNS_VERSION})
 add_custom_target(dist
   COMMAND git archive --prefix=${ARCHIVE_NAME}/ HEAD
   | xz > ${CMAKE_BINARY_DIR}/${ARCHIVE_NAME}.tar.xz
