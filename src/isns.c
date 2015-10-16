@@ -424,10 +424,7 @@ static void isns_ip_addr_set(const struct portal *portal, uint8_t *ip_addr)
 
 		/* RFC 4171 6.3.1: convert v4 to mapped v6 */
 		ip_addr[10] = ip_addr[11] = 0xff;
-		ip_addr[15] = 0xff & (addr >> 24);
-		ip_addr[14] = 0xff & (addr >> 16);
-		ip_addr[13] = 0xff & (addr >> 8);
-		ip_addr[12] = 0xff & addr;
+		memcpy(ip_addr + 12, &addr, 4);
 	} else if (portal->af == AF_INET6)
 		inet_pton(AF_INET6, portal->ip_addr, ip_addr);
 }
