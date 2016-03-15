@@ -22,7 +22,9 @@ add_executable(target-isns
   log.c
   util.c
   target-isns.c)
-set_property(TARGET target-isns PROPERTY C_STANDARD 99)
+if(IS_CMAKE_31)
+  set_property(TARGET target-isns PROPERTY C_STANDARD 99)
+endif()
 target_link_libraries(target-isns
   ccan)
 install(TARGETS target-isns RUNTIME DESTINATION bin)
