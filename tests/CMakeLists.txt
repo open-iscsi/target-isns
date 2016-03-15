@@ -14,6 +14,8 @@ add_executable(test-isns-fuzzing
   ../src/isns_proto.c
   ../src/itimer.c
   ../src/log.c)
-set_property(TARGET test-isns-fuzzing PROPERTY C_STANDARD 99)
+if(IS_CMAKE_31)
+  set_property(TARGET test-isns-fuzzing PROPERTY C_STANDARD 99)
+endif()
 target_link_libraries(test-isns-fuzzing
   ccan)
