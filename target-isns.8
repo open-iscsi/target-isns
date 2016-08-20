@@ -1,12 +1,11 @@
 .TH target-isns 8
 .SH NAME
-.B target-isns
-\- iSNS client for the Linux LIO iSCSI target
+target-isns \- iSNS client for the Linux LIO iSCSI target
 .SH SYNOPSIS
-.B target-isns [OPTION]
-.SH DESCRIPTION
 .B target-isns
-allows registering LIO iSCSI targets with an iSNS server.
+[\fI\,OPTION\/\fR]
+.SH DESCRIPTION
+target-isns allows registering LIO iSCSI targets with an iSNS server.
 .PP
 The Internet Storage Name Service (iSNS, RFC 4171) protocol makes
 easier to discover, manage and configure iSCSI devices.
@@ -16,37 +15,37 @@ and initiators can be configured to discover the targets by asking the
 iSNS server.
 .SH OPTIONS
 .TP
-.BR \-i ", " \-\-isns-server = HOSTNAME\fR
-Set the hostname of the iSNS server.
+\fB\-i\fR, \fB\-\-isns-server\fR=\fI\/HOSTNAME\/\fR
+set the hostname of the iSNS server
 .TP
-.BR \-p ", " \-\-isns-port = \PORT\fR
-Set the port of the iSNS server (default iSNS port is 3205).
+\fB\-p\fR, \fB\-\-isns-port\fR=\fI\/PORT\/\fR
+set the port number of the iSNS server (default iSNS port number is 3205)
 .TP
-.BR \-d ", " \-\-debug
-Increase the debugging level (implies \-\-foreground).
+\fB\-d\fR, \fB\-\-debug\fR
+increase the debugging level (implies \fB\-\-foreground\fR)
 .TP
-.BR \-f ", " \-\-foreground
-Run in the foreground.
+\fB\-f\fR, \fB\-\-foreground\fR
+run in the foreground
 .TP
-.BR \-v ", " \-\-version
-Print version information.
+\fB\-v\fR, \fB\-\-version\fR
+print version information and exit
 .TP
-.BR \-h ", " \-\-help
-Print a help message.
+\fB\-h\fR, \fB\-\-help\fR
+print this help message and exit
 .SH FILES
-.B /etc/target-isns.conf
+\fB\//etc/target-isns.conf\fR
 is the default configuration file.
 .PP
 The following parameters can be set in the configuration file:
 .TP
-.BR isns_server = HOSTNAME\fR
-Set the hostname of the iSNS server.
+\fB\/isns_server\fR=\fI\/HOSTNAME\fR
+set the hostname of the iSNS server
 .TP
-.BR isns_port = PORT
-Set the port of the iSNS server (default iSNS port is 3205).
+\fB\/isns_port\fR=\fI\/PORT\fR
+set the port number of the iSNS server (default iSNS port number is 3205)
 .TP
-.BR log_level = [info|debug]
-Set the log level (default is info).
+\fB\/log_level\fR=[\fI\/info\fR\/|\fI\/debug\fR]
+set the log level (default is info)
 .SH
 BUGS
 .PP
