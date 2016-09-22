@@ -1,6 +1,6 @@
 #
 # (C) Copyright 2014
-# Christophe Vu-Brugier <cvubrugier@yahoo.fr>
+# Christophe Vu-Brugier <cvubrugier@fastmail.fm>
 #
 # SPDX-License-Identifier:	GPL-2.0+
 #
