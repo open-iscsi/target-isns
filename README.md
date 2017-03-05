@@ -62,4 +62,4 @@ Contributions are welcomed!
 
  * Source repository: [GitHub](https://github.com/cvubrugier/target-isns)
  * Bug tracker: [GitHub](https://github.com/cvubrugier/target-isns/issues)
- * Tarballs: [Fedora Hosted](https://fedorahosted.org/releases/t/a/target-isns/)
+ * Tarballs: [GitHub](https://github.com/cvubrugier/target-isns/releases)
