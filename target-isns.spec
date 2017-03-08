@@ -6,7 +6,7 @@ Source:     %{name}-%{version}.tar.gz
 License:    GPLv2+
 ExclusiveOS: linux
 Group:      System Environment/Kernel
-URL:        https://github.com/cvubrugier/target-isns
+URL:        https://github.com/open-iscsi/target-isns
 BuildRoot:  %{_tmppath}/%{name}-%{version}-build
 BuildRequires: gcc flex glibc-devel make
 BuildRequires: cmake

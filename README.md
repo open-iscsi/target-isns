@@ -60,6 +60,6 @@ Development
 
 Contributions are welcomed!
 
- * Source repository: [GitHub](https://github.com/cvubrugier/target-isns)
- * Bug tracker: [GitHub](https://github.com/cvubrugier/target-isns/issues)
- * Tarballs: [GitHub](https://github.com/cvubrugier/target-isns/releases)
+ * Source repository: [GitHub](https://github.com/open-iscsi/target-isns)
+ * Bug tracker: [GitHub](https://github.com/open-iscsi/target-isns/issues)
+ * Tarballs: [GitHub](https://github.com/open-iscsi/target-isns/releases)
