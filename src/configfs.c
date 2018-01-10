@@ -47,8 +47,8 @@
 
 #include "isns.h"
 #include "log.h"
+#include "util.h"
 
-#define CONFIGFS_ISCSI_PATH	"/sys/kernel/config/target/iscsi"
 #define INOTIFY_MASK		(IN_CREATE | IN_DELETE | IN_MODIFY)
 #define INOTIFY_BUF_LEN		(16 * (sizeof(struct inotify_event) + NAME_MAX + 1))
 
@@ -69,7 +69,7 @@ struct tpg_portal {
 
 bool configfs_iscsi_path_exists(void)
 {
-	DIR *dir = opendir(CONFIGFS_ISCSI_PATH);
+	DIR *dir = opendir(config.configfs_iscsi_path);
 
 	if (dir) {
 		closedir(dir);
@@ -120,7 +120,7 @@ static struct target *configfs_target_init(const char *name)
 	if ((tgt = malloc(sizeof(struct target))) == NULL)
 		return NULL;
 
-	snprintf(path, sizeof(path), CONFIGFS_ISCSI_PATH "/%s", name);
+	snprintf(path, sizeof(path), "%s/%s", config.configfs_iscsi_path, name);
 	strncpy(tgt->name, name, ISCSI_NAME_SIZE);
 	tgt->name[ISCSI_NAME_SIZE - 1] = '\0';
 	tgt->exists = false;
@@ -140,8 +140,8 @@ static bool configfs_tpg_enabled(const struct target *tgt, uint16_t tpg_tag)
 	bool enabled = false;
 
 	snprintf(path, sizeof(path),
-		 CONFIGFS_ISCSI_PATH "/%s/tpgt_%hu/enable",
-		 tgt->name, tpg_tag);
+		 "%s/%s/tpgt_%hu/enable",
+		 config.configfs_iscsi_path, tgt->name, tpg_tag);
 	if ((fd = open(path, O_RDONLY)) == -1)
 		return false;
 	if ((nr = read(fd, buf, sizeof(buf))) != -1) {
@@ -158,8 +158,8 @@ static struct tpg *configfs_tpg_init(struct target *tgt, uint16_t tpg_tag)
 	char path[512];
 	char np_path[512];
 
-	snprintf(path, sizeof(path), CONFIGFS_ISCSI_PATH "/%s/tpgt_%hu",
-		 tgt->name, tpg_tag);
+	snprintf(path, sizeof(path), "%s/%s/tpgt_%hu",
+		 config.configfs_iscsi_path, tgt->name, tpg_tag);
 	snprintf(np_path, sizeof(np_path), "%s/np", path);
 	tpg->watch_fd = inotify_add_watch(inotify_fd, path, INOTIFY_MASK);
 	tpg->np_watch_fd = inotify_add_watch(inotify_fd, np_path, INOTIFY_MASK);
@@ -251,8 +251,8 @@ static int configfs_tpg_update(struct target *tgt, struct tpg *tpg)
 	char np_path[512];
 
 	snprintf(np_path, sizeof(np_path),
-		 CONFIGFS_ISCSI_PATH "/%s/tpgt_%hu/np",
-		 tgt->name, tpg->tag);
+		 "%s/%s/tpgt_%hu/np",
+		 config.configfs_iscsi_path, tgt->name, tpg->tag);
 	np_dir = opendir(np_path);
 	if (!np_dir)
 		return -ENOENT;
@@ -295,7 +295,8 @@ static int configfs_target_update(struct target *tgt)
 	uint16_t tpg_tag;
 	char tgt_path[512];
 
-	snprintf(tgt_path, sizeof(tgt_path), CONFIGFS_ISCSI_PATH "/%s", tgt->name);
+	snprintf(tgt_path, sizeof(tgt_path), "%s/%s",
+		 config.configfs_iscsi_path, tgt->name);
 	tgt_dir = opendir(tgt_path);
 	if (!tgt_dir)
 		return -ENOENT;
@@ -346,10 +347,11 @@ int configfs_inotify_init(void)
 	if ((inotify_fd = inotify_init()) == -1)
 		return -1;
 
-	if (inotify_add_watch(inotify_fd, CONFIGFS_ISCSI_PATH, INOTIFY_MASK) == -1)
+	if (inotify_add_watch(inotify_fd, config.configfs_iscsi_path,
+			      INOTIFY_MASK) == -1)
 		goto out;
 
-	iscsi_dir = opendir(CONFIGFS_ISCSI_PATH);
+	iscsi_dir = opendir(config.configfs_iscsi_path);
 	if (!iscsi_dir)
 		goto out;
 

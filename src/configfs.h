@@ -41,6 +41,7 @@ struct portal {
 };
 
 #define ALL_TARGETS ((struct target*) 1)
+#define CONFIGFS_ISCSI_PATH    "/sys/kernel/config/target/iscsi"
 
 bool configfs_iscsi_path_exists(void);
 
