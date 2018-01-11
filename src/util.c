@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <sys/types.h>
 #include <unistd.h>
+#include "configfs.h"
 
 #define PIDFILE		"/run/target-isns.pid"
 #define CONFFILE	"/etc/target-isns.conf"
@@ -42,6 +43,7 @@ int conffile_read(void)
 	memset(&config, 0, sizeof(config));
 	config.log_level = LOG_INFO;
 	config.isns_port = ISNS_PORT;
+	strcpy(config.configfs_iscsi_path, CONFIGFS_ISCSI_PATH);
 
 	if ((file = fopen(CONFFILE, "r")) == NULL) {
 		log_print(LOG_ERR, "Could not read " CONFFILE);
@@ -98,6 +100,11 @@ int conffile_read(void)
 				config.log_level = LOG_INFO;
 			else if (streq(value, "debug"))
 				config.log_level = LOG_DEBUG;
+		} else if (streq(key, "configfs_iscsi_path")) {
+			const size_t sz = sizeof(config.configfs_iscsi_path);
+
+			strncpy(config.configfs_iscsi_path, value, sz);
+			config.configfs_iscsi_path[sz - 1] = '\0';
 		}
 	}
 	fclose(file);
