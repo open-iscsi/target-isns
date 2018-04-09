@@ -933,38 +933,39 @@ static void isns_rsp_handle(const struct isns_hdr *hdr)
 		case ISNS_ATTR_ENTITY_IDENTIFIER:
 			break;
 		case ISNS_ATTR_REGISTRATION_PERIOD:
+			if (vlen != 4)
+				break;
 			period = ntohl(*(tlv->value));
 			isns_registration_set_period(period);
 			break;
 		case ISNS_ATTR_ISCSI_NAME:
-			if (vlen) {
-				size_t slen = vlen - 1;
-
-				if (slen >= ISCSI_NAME_SIZE)
-					slen = ISCSI_NAME_SIZE - 1;
-
-				*((char *) tlv->value + slen) = 0;
-
-				iscsi_name = (char *) tlv->value;
-			} else
+			if (vlen == 0) {
 				iscsi_name = NULL;
+				break;
+			}
+			size_t slen = vlen - 1;
+			if (slen >= ISCSI_NAME_SIZE)
+				slen = ISCSI_NAME_SIZE - 1;
+			*((char *) tlv->value + slen) = '\0';
+			iscsi_name = (char *) tlv->value;
 			break;
 		case ISNS_ATTR_ISCSI_NODE_TYPE:
-			if (vlen == 4 && iscsi_name) {
-				uint32_t node_type = ntohl(*(tlv->value));
-				switch (node_type) {
-				case ISNS_NODE_CONTROL:
-					log_print(LOG_DEBUG, "%s is a control node", iscsi_name);
-					break;
-				case ISNS_NODE_INITIATOR:
-					log_print(LOG_DEBUG, "%s is an initiator", iscsi_name);
-					break;
-				case ISNS_NODE_TARGET:
-					log_print(LOG_DEBUG, "%s is a target", iscsi_name);
-					break;
-				}
-			} else
-				iscsi_name = NULL;
+			if (vlen != 4)
+				break;
+			if (!iscsi_name)
+				break;
+			uint32_t node_type = ntohl(*(tlv->value));
+			switch (node_type) {
+			case ISNS_NODE_CONTROL:
+				log_print(LOG_DEBUG, "%s is a control node", iscsi_name);
+				break;
+			case ISNS_NODE_INITIATOR:
+				log_print(LOG_DEBUG, "%s is an initiator", iscsi_name);
+				break;
+			case ISNS_NODE_TARGET:
+				log_print(LOG_DEBUG, "%s is a target", iscsi_name);
+				break;
+			}
 			break;
 		case ISNS_ATTR_PORTAL_IP_ADDRESS:
 			if (vlen == 16)
@@ -973,10 +974,10 @@ static void isns_rsp_handle(const struct isns_hdr *hdr)
 				memset(ip_addr, 0, 16);
 			break;
 		case ISNS_ATTR_PORTAL_PORT:
-			if (vlen == 4) {
-				port = ntohl(*(tlv->value));
-				isns_portals_set_registered(ip_addr, port);
-			}
+			if (vlen != 4)
+				break;
+			port = ntohl(*(tlv->value));
+			isns_portals_set_registered(ip_addr, port);
 			break;
 		default:
 			iscsi_name = NULL;
