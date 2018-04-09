@@ -872,7 +872,7 @@ static void isns_rsp_handle(const struct isns_hdr *hdr)
 	uint16_t transaction = ntohs(hdr->transaction);
 	uint32_t status;
 	struct isns_query *query;
-	char *name = NULL;
+	char *iscsi_name = NULL;
 	uint8_t ip_addr[16];
 	uint32_t port;
 	uint32_t period;
@@ -945,26 +945,26 @@ static void isns_rsp_handle(const struct isns_hdr *hdr)
 
 				*((char *) tlv->value + slen) = 0;
 
-				name = (char *) tlv->value;
+				iscsi_name = (char *) tlv->value;
 			} else
-				name = NULL;
+				iscsi_name = NULL;
 			break;
 		case ISNS_ATTR_ISCSI_NODE_TYPE:
-			if (vlen == 4 && name) {
+			if (vlen == 4 && iscsi_name) {
 				uint32_t node_type = ntohl(*(tlv->value));
 				switch (node_type) {
 				case ISNS_NODE_CONTROL:
-					log_print(LOG_DEBUG, "%s is a control node", name);
+					log_print(LOG_DEBUG, "%s is a control node", iscsi_name);
 					break;
 				case ISNS_NODE_INITIATOR:
-					log_print(LOG_DEBUG, "%s is an initiator", name);
+					log_print(LOG_DEBUG, "%s is an initiator", iscsi_name);
 					break;
 				case ISNS_NODE_TARGET:
-					log_print(LOG_DEBUG, "%s is a target", name);
+					log_print(LOG_DEBUG, "%s is a target", iscsi_name);
 					break;
 				}
 			} else
-				name = NULL;
+				iscsi_name = NULL;
 			break;
 		case ISNS_ATTR_PORTAL_IP_ADDRESS:
 			if (vlen == 16)
@@ -979,7 +979,7 @@ static void isns_rsp_handle(const struct isns_hdr *hdr)
 			}
 			break;
 		default:
-			name = NULL;
+			iscsi_name = NULL;
 			break;
 		}
 
