@@ -24,7 +24,7 @@ struct target {
 };
 
 struct tpg {
-	struct list_node node;  /* Member of a target->tpg list */
+	struct list_node node;  /* Member of a target->tpgs list */
 	uint16_t tag;
 	bool enabled;
 	bool exists;
