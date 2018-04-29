@@ -218,9 +218,23 @@ static struct portal_ref *configfs_portal_ref_init(struct tpg *tpg, struct porta
 
 	portal->refcount++;
 	portal_ref->portal = portal;
+	portal_ref->exists = false;
 	list_add(&tpg->portals, &portal_ref->node);
 
 	return portal_ref;
+}
+
+static struct portal_ref *configfs_portal_ref_find(const struct tpg *tpg,
+						   const struct portal *portal)
+{
+	struct portal_ref *portal_ref;
+
+	list_for_each(&tpg->portals, portal_ref, node) {
+		if (portal_ref->portal == portal)
+			return portal_ref;
+	}
+
+	return NULL;
 }
 
 static int configfs_tpg_update(struct target *tgt, struct tpg *tpg)
@@ -228,6 +242,7 @@ static int configfs_tpg_update(struct target *tgt, struct tpg *tpg)
 	DIR *np_dir;
 	struct dirent *dirent;
 	char np_path[512];
+	struct portal_ref *portal_ref, *portal_ref_next;
 
 	snprintf(np_path, sizeof(np_path),
 		 "%s/%s/tpgt_%hu/np",
@@ -237,6 +252,10 @@ static int configfs_tpg_update(struct target *tgt, struct tpg *tpg)
 		return -ENOENT;
 
 	tpg->enabled = configfs_tpg_enabled(tgt, tpg->tag);
+
+	list_for_each(&tpg->portals, portal_ref, node) {
+		portal_ref->exists = false;
+	}
 
 	while ((dirent = readdir(np_dir))) {
 		if (streq(dirent->d_name, ".") || streq(dirent->d_name, ".."))
@@ -254,12 +273,23 @@ static int configfs_tpg_update(struct target *tgt, struct tpg *tpg)
 			assert(portal);
 		}
 
-		if (!tpg_has_portal(tpg, portal)) {
-			struct portal_ref *portal_ref = configfs_portal_ref_init(tpg, portal);
+		struct portal_ref *portal_ref = configfs_portal_ref_find(tpg, portal);
+		if (!portal_ref) {
+			portal_ref = configfs_portal_ref_init(tpg, portal);
 			assert(portal_ref);
 		}
+		portal_ref->exists = true;
 	}
 	closedir(np_dir);
+
+	list_for_each_safe(&tpg->portals, portal_ref, portal_ref_next, node) {
+		if (portal_ref->exists)
+			continue;
+
+		portal_ref->portal->refcount--;
+		list_del(&portal_ref->node);
+		free(portal_ref);
+	}
 
 	return 0;
 }
@@ -480,6 +510,8 @@ static void configfs_tpg_subtree_handle(const struct inotify_event *event)
 {
 	struct target *tgt;
 	struct tpg *tpg = NULL;
+	uint16_t tpg_tag;
+	struct portal_ref *portal_ref, *portal_ref_next;
 
 	list_for_each(&targets, tgt, node) {
 		tpg = tpg_find_by_watch(tgt, event->wd);
@@ -489,10 +521,23 @@ static void configfs_tpg_subtree_handle(const struct inotify_event *event)
 	if (!tpg)
 		return;
 
-	configfs_tpg_update(tgt, tpg);
+	tpg_tag = tpg->tag;
+
+	if (configfs_tpg_update(tgt, tpg) == -ENOENT) {
+		list_for_each_safe(&tpg->portals, portal_ref, portal_ref_next, node) {
+			portal_ref->portal->refcount--;
+			list_del(&portal_ref->node);
+			free(portal_ref);
+		}
+		list_del(&tpg->node);
+		inotify_rm_watch(inotify_fd, tpg->watch_fd);
+		inotify_rm_watch(inotify_fd, tpg->np_watch_fd);
+		free(tpg);
+	}
+
 	isns_target_register_later(tgt);
 	log_print(LOG_DEBUG, "inotify[%c] %s/tpg%hu/%s",
-		  inotify_event_str(event), tgt->name, tpg->tag, event->name);
+		  inotify_event_str(event), tgt->name, tpg_tag, event->name);
 }
 
 void configfs_inotify_events_handle(void)
@@ -564,14 +609,7 @@ struct portal *portal_find(int af, const char *ip_addr, uint16_t port)
 
 bool tpg_has_portal(const struct tpg *tpg, const struct portal *portal)
 {
-	struct portal_ref *portal_ref;
-
-	list_for_each(&tpg->portals, portal_ref, node) {
-		if (portal_ref->portal == portal)
-			return true;
-	}
-
-	return false;
+	return configfs_portal_ref_find(tpg, portal) != NULL;
 }
 
 bool tgt_has_portal(const struct target *target, const struct portal *portal)

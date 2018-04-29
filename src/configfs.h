@@ -45,6 +45,7 @@ struct portal {
 struct portal_ref {
 	struct list_node node;  /* Member of the tpg->portals list */
 	struct portal *portal;
+	bool exists;
 };
 
 #define ALL_TARGETS ((struct target*) 1)
