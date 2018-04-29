@@ -67,3 +67,6 @@ by a previous DevAttrReg request.
 The OpenIndiana iSNS server has no problem with duplicate portals in a
 DevAttrReg message or repetitive registration of a portal by several
 DevAttrReg messages.
+
+The Open-iSNS server has no problem with repetitive registrations of a
+portal by several DevAttrReg messages.
