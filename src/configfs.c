@@ -224,6 +224,27 @@ static struct portal_ref *configfs_portal_ref_init(struct tpg *tpg, struct porta
 	return portal_ref;
 }
 
+static void configfs_portal_ref_release(const struct portal_ref *portal_ref)
+{
+	struct portal *portal = portal_ref->portal;
+
+	portal->refcount--;
+	if (portal->refcount == 0) {
+		/*
+		 * 5.6.5.4. Device Deregister Request (DevDereg)
+		 *
+		 *   Upon receiving the DevDereg, the iSNS server
+		 *   removes all objects identified by the Operating
+		 *   Attribute(s), and all subordinate objects that
+		 *   are solely dependent on those identified objects.
+		 *
+		 * When its reference counter reaches zero, the portal
+		 * is no longer registered with the iSNS server.
+		 */
+		portal->registered = false;
+	}
+}
+
 static struct portal_ref *configfs_portal_ref_find(const struct tpg *tpg,
 						   const struct portal *portal)
 {
@@ -286,7 +307,7 @@ static int configfs_tpg_update(struct target *tgt, struct tpg *tpg)
 		if (portal_ref->exists)
 			continue;
 
-		portal_ref->portal->refcount--;
+		configfs_portal_ref_release(portal_ref);
 		list_del(&portal_ref->node);
 		free(portal_ref);
 	}
@@ -333,7 +354,7 @@ static int configfs_target_update(struct target *tgt)
 			continue;
 
 		list_for_each_safe(&tpg->portals, portal_ref, portal_ref_next, node) {
-			portal_ref->portal->refcount--;
+			configfs_portal_ref_release(portal_ref);
 			list_del(&portal_ref->node);
 			free(portal_ref);
 		}
@@ -525,7 +546,7 @@ static void configfs_tpg_subtree_handle(const struct inotify_event *event)
 
 	if (configfs_tpg_update(tgt, tpg) == -ENOENT) {
 		list_for_each_safe(&tpg->portals, portal_ref, portal_ref_next, node) {
-			portal_ref->portal->refcount--;
+			configfs_portal_ref_release(portal_ref);
 			list_del(&portal_ref->node);
 			free(portal_ref);
 		}
