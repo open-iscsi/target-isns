@@ -28,6 +28,7 @@ struct tpg {
 	uint16_t tag;
 	bool enabled;
 	bool exists;
+	struct list_head portals;
 	int watch_fd;
 	int np_watch_fd;
 };
@@ -38,6 +39,13 @@ struct portal {
 	char ip_addr[INET6_ADDRSTRLEN];
 	uint16_t port;
 	bool registered;
+	unsigned int refcount;  /* Number of TPGs referring to the portal */
+};
+
+struct portal_ref {
+	struct list_node node;  /* Member of the tpg->portals list */
+	struct portal *portal;
+	bool exists;
 };
 
 #define ALL_TARGETS ((struct target*) 1)

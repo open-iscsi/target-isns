@@ -610,6 +610,9 @@ static int isns_target_register(const struct target *target)
 
 		/* Register the TPGs. */
 		list_for_each(&tgt->tpgs, tpg, node) {
+			if (list_empty(&tpg->portals))
+				continue;
+
 			length += isns_tlv_set_string(&tlv,
 					ISNS_ATTR_PG_ISCSI_NAME, tgt->name);
 			isns_target_register_flush(&tlv, &buf[0], sizeof(buf),
