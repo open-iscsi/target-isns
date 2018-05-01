@@ -458,6 +458,13 @@ static void isns_ip_addr_get(const uint8_t *ip_addr, int *af, char *ip_str)
 	inet_ntop(*af, &ip_addr[start], ip_str, INET6_ADDRSTRLEN);
 }
 
+static void isns_target_set_registered(const char *iscsi_name)
+{
+	struct target *target = target_find(iscsi_name);
+	if (target)
+		target->registered = true;
+}
+
 static void isns_portals_set_registered(uint8_t *ip_addr, uint32_t port)
 {
 	int af;
@@ -546,6 +553,9 @@ static int isns_target_register(const struct target *target)
 	int err;
 	bool all_targets = target == ALL_TARGETS;
 	struct isns_query *query;
+
+	if (!all_targets && target->registered)
+		flags |= ISNS_FLAG_REPLACE;
 
 	if (all_targets) {
 		if (list_empty(&targets))
@@ -950,6 +960,7 @@ static void isns_rsp_handle(const struct isns_hdr *hdr)
 				slen = ISCSI_NAME_SIZE - 1;
 			*((char *) tlv->value + slen) = '\0';
 			iscsi_name = (char *) tlv->value;
+			isns_target_set_registered(iscsi_name);
 			break;
 		case ISNS_ATTR_ISCSI_NODE_TYPE:
 			if (vlen != 4)

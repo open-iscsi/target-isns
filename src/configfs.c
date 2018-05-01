@@ -115,6 +115,7 @@ static struct target *configfs_target_init(const char *name)
 	strncpy(tgt->name, name, ISCSI_NAME_SIZE);
 	tgt->name[ISCSI_NAME_SIZE - 1] = '\0';
 	tgt->exists = false;
+	tgt->registered = false;
 	tgt->registration_pending = false;
 	tgt->watch_fd = inotify_add_watch(inotify_fd, path, INOTIFY_MASK);
 	list_head_init(&tgt->tpgs);
