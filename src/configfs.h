@@ -67,4 +67,4 @@ struct portal *portal_find(int af, const char *ip_addr, uint16_t port);
 
 bool tpg_has_portal(const struct tpg *tpg, const struct portal *portal);
 
-bool tgt_has_portal(const struct target *target, const struct portal *portal);
+bool target_has_portal(const struct target *target, const struct portal *portal);

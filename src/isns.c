@@ -579,7 +579,7 @@ static int isns_target_register(const struct target *target)
 
 	/* Register the portals. */
 	list_for_each(&portals, portal, node) {
-		if (!tgt_has_portal(target, portal) && !all_targets)
+		if (!target_has_portal(target, portal) && !all_targets)
 			continue;
 
 		if (portal->registered)

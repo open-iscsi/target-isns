@@ -633,7 +633,7 @@ bool tpg_has_portal(const struct tpg *tpg, const struct portal *portal)
 	return configfs_portal_ref_find(tpg, portal) != NULL;
 }
 
-bool tgt_has_portal(const struct target *target, const struct portal *portal)
+bool target_has_portal(const struct target *target, const struct portal *portal)
 {
 	struct tpg *tpg;
 
