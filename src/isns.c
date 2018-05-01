@@ -441,23 +441,6 @@ static void isns_ip_addr_set(const struct portal *portal, uint8_t *ip_addr)
 		inet_pton(AF_INET6, portal->ip_addr, ip_addr);
 }
 
-static void isns_ip_addr_get(const uint8_t *ip_addr, int *af, char *ip_str)
-{
-	size_t start;
-
-	start = 12;
-	*af = AF_INET;
-	for (size_t i = 0; i < 12; i++) {
-		if ((i <  10 && ip_addr[i] != 0x00) ||
-		    (i >= 10 && ip_addr[i] != 0xFF)) {
-			start = 0;
-			*af = AF_INET6;
-			break;
-		}
-	}
-	inet_ntop(*af, &ip_addr[start], ip_str, INET6_ADDRSTRLEN);
-}
-
 static void isns_target_set_registered(const char *iscsi_name)
 {
 	struct target *target = target_find(iscsi_name);
@@ -465,28 +448,21 @@ static void isns_target_set_registered(const char *iscsi_name)
 		target->registered = true;
 }
 
-static void isns_portals_set_registered(uint8_t *ip_addr, uint32_t port)
+static bool portal_is_solely_used(const struct portal *portal,
+				  const struct target *target)
 {
-	int af;
-	char ip_str[INET6_ADDRSTRLEN];
-	struct portal *portal;
+	struct target *tgt;
 
-	isns_ip_addr_get(ip_addr, &af, ip_str);
-	portal = portal_find(af, ip_str, port);
-	if (portal)
-		portal->registered = true;
+	assert(target_has_portal(target, portal));
 
-	/*
-	 * If the IP address is the local IP address, also mark the
-	 * default portal as registered.
-	 */
-	if (memcmp(ip_addr, ip, 16) == 0) {
-		strncpy(ip_str, af == AF_INET ? "0.0.0.0" : "::", INET6_ADDRSTRLEN);
-		ip_str[INET6_ADDRSTRLEN - 1] = '\0';
-		portal = portal_find(af, ip_str, port);
-		if (portal)
-			portal->registered = true;
+	list_for_each(&targets, tgt, node) {
+		if (tgt == target)
+			continue;
+		if (tgt->registered && target_has_portal(tgt, portal))
+			return false;
 	}
+
+	return true;
 }
 
 #define TGT_REG_BUFSIZE		8192
@@ -592,7 +568,15 @@ static int isns_target_register(const struct target *target)
 		if (!target_has_portal(target, portal) && !all_targets)
 			continue;
 
-		if (portal->registered)
+		/*
+		 * The Microsoft iSNS server returns an "invalid
+		 * update" error if "an object specified in a
+		 * DevAttrReg request to update an Entity already
+		 * exists in another Entity".
+		 *
+		 * https://docs.microsoft.com/en-us/previous-versions/windows/hardware/design/dn653564(v=vs.85)#invalid-update-status-code-14
+		 */
+		if (!portal_is_solely_used(portal, target))
 			continue;
 
 		uint32_t port = htonl(portal->port);
@@ -886,7 +870,6 @@ static void isns_rsp_handle(const struct isns_hdr *hdr)
 	struct isns_query *query;
 	char *iscsi_name = NULL;
 	uint8_t ip_addr[16];
-	uint32_t port;
 	uint32_t period;
 
 	/* Only pop the query from the list if the last PDU is received. */
@@ -989,8 +972,6 @@ static void isns_rsp_handle(const struct isns_hdr *hdr)
 		case ISNS_ATTR_PORTAL_PORT:
 			if (vlen != 4)
 				break;
-			port = ntohl(*(tlv->value));
-			isns_portals_set_registered(ip_addr, port);
 			break;
 		default:
 			iscsi_name = NULL;

@@ -63,6 +63,7 @@ following requirement from RFC 4171:
 Moreover, the Microsoft iSNS server returns an "invalid update" error
 if a DevAttrReg request registers a portal that was already registered
 by a previous DevAttrReg request.
+See [Invalid Update (status code 14)](https://docs.microsoft.com/en-us/previous-versions/windows/hardware/design/dn653564(v=vs.85)#invalid-update-status-code-14).
 
 The OpenIndiana iSNS server has no problem with duplicate portals in a
 DevAttrReg message or repetitive registration of a portal by several

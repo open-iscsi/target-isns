@@ -39,8 +39,6 @@ struct portal {
 	int af;
 	char ip_addr[INET6_ADDRSTRLEN];
 	uint16_t port;
-	bool registered;
-	unsigned int refcount;  /* Number of TPGs referring to the portal */
 };
 
 struct portal_ref {
