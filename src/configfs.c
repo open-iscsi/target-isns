@@ -31,6 +31,8 @@
  *   +-- $IQN N                         W   +-- target N
  */
 
+#define _GNU_SOURCE
+
 #include "configfs.h"
 
 #include <ccan/list/list.h>
@@ -106,12 +108,13 @@ static struct tpg *tpg_find_by_watch(const struct target *tgt, int watch_fd)
 static struct target *configfs_target_init(const char *name)
 {
 	struct target *tgt;
-	char path[512];
+	char *path;
 
 	if ((tgt = malloc(sizeof(struct target))) == NULL)
 		return NULL;
 
-	snprintf(path, sizeof(path), "%s/%s", config.configfs_iscsi_path, name);
+	if (asprintf(&path, "%s/%s", config.configfs_iscsi_path, name) < 0)
+		return NULL;
 	strncpy(tgt->name, name, ISCSI_NAME_SIZE);
 	tgt->name[ISCSI_NAME_SIZE - 1] = '\0';
 	tgt->exists = false;
@@ -120,26 +123,33 @@ static struct target *configfs_target_init(const char *name)
 	tgt->watch_fd = inotify_add_watch(inotify_fd, path, INOTIFY_MASK);
 	list_head_init(&tgt->tpgs);
 	list_add_tail(&targets, &tgt->node);
+	free(path);
 
 	return tgt;
 }
 
 static bool configfs_tpg_enabled(const struct target *tgt, uint16_t tpg_tag)
 {
-	int fd;
+	int fd = -1;
 	ssize_t nr;
-	char buf[8], path[512];
+	char buf[8];
+	char *path = NULL;
 	bool enabled = false;
 
-	snprintf(path, sizeof(path),
-		 "%s/%s/tpgt_%hu/enable",
-		 config.configfs_iscsi_path, tgt->name, tpg_tag);
+	if (asprintf(&path, "%s/%s/tpgt_%hu/enable",
+		     config.configfs_iscsi_path, tgt->name, tpg_tag) < 0)
+		goto dun;
 	if ((fd = open(path, O_RDONLY)) == -1)
-		return false;
+		goto dun;
 	if ((nr = read(fd, buf, sizeof(buf))) != -1) {
 		enabled = buf[0] == '1';
 	}
-	close(fd);
+
+dun:
+	if (fd >= 0)
+		close(fd);
+	if (path)
+		free(path);
 
 	return enabled;
 }
@@ -147,12 +157,14 @@ static bool configfs_tpg_enabled(const struct target *tgt, uint16_t tpg_tag)
 static struct tpg *configfs_tpg_init(struct target *tgt, uint16_t tpg_tag)
 {
 	struct tpg *tpg = malloc(sizeof(struct tpg));
-	char path[512];
-	char np_path[512];
+	char *path;
+	char *np_path;
 
-	snprintf(path, sizeof(path), "%s/%s/tpgt_%hu",
-		 config.configfs_iscsi_path, tgt->name, tpg_tag);
-	snprintf(np_path, sizeof(np_path), "%s/np", path);
+	if (asprintf(&path, "%s/%s/tpgt_%hu",
+		     config.configfs_iscsi_path, tgt->name, tpg_tag) < 0)
+		goto err_out;
+	if (asprintf(&np_path, "%s/np", path) < 0)
+		goto err_out;
 	tpg->watch_fd = inotify_add_watch(inotify_fd, path, INOTIFY_MASK);
 	tpg->np_watch_fd = inotify_add_watch(inotify_fd, np_path, INOTIFY_MASK);
 	tpg->tag = tpg_tag;
@@ -160,8 +172,18 @@ static struct tpg *configfs_tpg_init(struct target *tgt, uint16_t tpg_tag)
 	tpg->exists = false;
 	list_head_init(&tpg->portals);
 	list_add(&tgt->tpgs, &tpg->node);
+	free(path);
+	free(np_path);
 
 	return tpg;
+
+err_out:
+	if (path)
+		free(path);
+	if (np_path)
+		free(np_path);
+	free(tpg);
+	return NULL;
 }
 
 static int get_portal(const char *str, int *af, char *ip_addr, uint16_t *port)
@@ -239,13 +261,15 @@ static int configfs_tpg_update(struct target *tgt, struct tpg *tpg)
 {
 	DIR *np_dir;
 	struct dirent *dirent;
-	char np_path[512];
+	char *np_path;
 	struct portal_ref *portal_ref, *portal_ref_next;
 
-	snprintf(np_path, sizeof(np_path),
-		 "%s/%s/tpgt_%hu/np",
-		 config.configfs_iscsi_path, tgt->name, tpg->tag);
+	if (asprintf(&np_path, "%s/%s/tpgt_%hu/np",
+		     config.configfs_iscsi_path, tgt->name, tpg->tag) < 0)
+		return -ENOMEM;
+
 	np_dir = opendir(np_path);
+	free(np_path);
 	if (!np_dir)
 		return -ENOENT;
 
@@ -297,11 +321,13 @@ static int configfs_target_update(struct target *tgt)
 	struct dirent *dirent;
 	struct tpg *tpg, *tpg_next;
 	uint16_t tpg_tag;
-	char tgt_path[512];
+	char *tgt_path;
 
-	snprintf(tgt_path, sizeof(tgt_path), "%s/%s",
-		 config.configfs_iscsi_path, tgt->name);
+	if (asprintf(&tgt_path, "%s/%s",
+		    config.configfs_iscsi_path, tgt->name) < 0)
+		return -ENOMEM;
 	tgt_dir = opendir(tgt_path);
+	free(tgt_path);
 	if (!tgt_dir)
 		return -ENOENT;
 
@@ -318,6 +344,8 @@ static int configfs_target_update(struct target *tgt)
 
 		if (!tpg)
 			tpg = configfs_tpg_init(tgt, tpg_tag);
+		if (!tpg)
+			return -ENOMEM;
 		configfs_tpg_update(tgt, tpg);
 		tpg->exists = true;
 	}
@@ -370,6 +398,8 @@ int configfs_inotify_init(void)
 		tgt = target_find(dirent->d_name);
 		if (!tgt)
 			tgt = configfs_target_init(dirent->d_name);
+		if (!tgt)
+			goto out;
 		configfs_target_update(tgt);
 	}
 	closedir(iscsi_dir);
@@ -491,6 +521,8 @@ static void configfs_tpg_handle(const struct inotify_event *event)
 
 	if ((event->mask & IN_CREATE) && !tpg) {
 		tpg = configfs_tpg_init(tgt, tpg_tag);
+		if (!tpg)
+			return;
 		configfs_tpg_update(tgt, tpg);
 	} else if ((event->mask & IN_DELETE) && tpg) {
 		list_del(&tpg->node);
