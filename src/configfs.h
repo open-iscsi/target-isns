@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2013
- * Christophe Vu-Brugier <cvubrugier@yahoo.fr>
+ * Christophe Vu-Brugier <cvubrugier@fastmail.fm>
  *
  * SPDX-License-Identifier:	GPL-2.0+
  */
@@ -19,15 +19,17 @@ struct target {
 	char name[ISCSI_NAME_SIZE];
 	struct list_head tpgs;
 	bool exists;
+	bool registered;
 	bool registration_pending;
 	int watch_fd;
 };
 
 struct tpg {
-	struct list_node node;  /* Member of a target->tpg list */
+	struct list_node node;  /* Member of a target->tpgs list */
 	uint16_t tag;
 	bool enabled;
 	bool exists;
+	struct list_head portals;
 	int watch_fd;
 	int np_watch_fd;
 };
@@ -37,10 +39,16 @@ struct portal {
 	int af;
 	char ip_addr[INET6_ADDRSTRLEN];
 	uint16_t port;
-	bool registered;
+};
+
+struct portal_ref {
+	struct list_node node;  /* Member of the tpg->portals list */
+	struct portal *portal;
+	bool exists;
 };
 
 #define ALL_TARGETS ((struct target*) 1)
+#define CONFIGFS_ISCSI_PATH    "/sys/kernel/config/target/iscsi"
 
 bool configfs_iscsi_path_exists(void);
 
@@ -58,4 +66,4 @@ struct portal *portal_find(int af, const char *ip_addr, uint16_t port);
 
 bool tpg_has_portal(const struct tpg *tpg, const struct portal *portal);
 
-bool tgt_has_portal(const struct target *target, const struct portal *portal);
+bool target_has_portal(const struct target *target, const struct portal *portal);

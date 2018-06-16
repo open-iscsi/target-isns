@@ -1,15 +1,18 @@
 #
 # (C) Copyright 2013
-# Christophe Vu-Brugier <cvubrugier@yahoo.fr>
+# Christophe Vu-Brugier <cvubrugier@fastmail.fm>
 #
 # SPDX-License-Identifier:	GPL-2.0+
 #
 
 project(target-isns "C")
-set(TARGET_ISNS_VERSION "0.6.1")
+set(TARGET_ISNS_VERSION "0.6.4")
 
 cmake_minimum_required(VERSION 2.8)
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Werror -std=c99")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Werror")
+if(CMAKE_VERSION VERSION_LESS "3.1")
+  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c99")
+endif()
 
 option(SUPPORT_SYSTEMD "Support service control via systemd" OFF)
 

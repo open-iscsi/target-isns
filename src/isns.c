@@ -151,15 +151,27 @@ struct isns_query *isns_query_init(const char *name, uint16_t transaction)
 	return query;
 }
 
-static struct isns_query *isns_query_pop(uint16_t transaction)
+static struct isns_query *isns_query_find(uint16_t transaction)
 {
 	struct isns_query *query, *query_next;
 
 	list_for_each_safe(&query_list, query, query_next, node) {
 		if (query->transaction == transaction) {
-			list_del(&query->node);
 			return query;
 		}
+	}
+
+	return NULL;
+}
+
+static struct isns_query *isns_query_pop(uint16_t transaction)
+{
+	struct isns_query *query;
+
+	query = isns_query_find(transaction);
+	if (query != NULL) {
+		list_del(&query->node);
+		return query;
 	}
 
 	return NULL;
@@ -424,59 +436,88 @@ static void isns_ip_addr_set(const struct portal *portal, uint8_t *ip_addr)
 
 		/* RFC 4171 6.3.1: convert v4 to mapped v6 */
 		ip_addr[10] = ip_addr[11] = 0xff;
-		ip_addr[15] = 0xff & (addr >> 24);
-		ip_addr[14] = 0xff & (addr >> 16);
-		ip_addr[13] = 0xff & (addr >> 8);
-		ip_addr[12] = 0xff & addr;
+		memcpy(ip_addr + 12, &addr, 4);
 	} else if (portal->af == AF_INET6)
 		inet_pton(AF_INET6, portal->ip_addr, ip_addr);
 }
 
-static void isns_ip_addr_get(const uint8_t *ip_addr, int *af, char *ip_str)
+static void isns_target_set_registered(const char *iscsi_name)
 {
-	size_t start;
-
-	start = 12;
-	*af = AF_INET;
-	for (size_t i = 0; i < 12; i++) {
-		if ((i <  10 && ip_addr[i] != 0x00) ||
-		    (i >= 10 && ip_addr[i] != 0xFF)) {
-			start = 0;
-			*af = AF_INET6;
-			break;
-		}
-	}
-	inet_ntop(*af, &ip_addr[start], ip_str, INET6_ADDRSTRLEN);
+	struct target *target = target_find(iscsi_name);
+	if (target)
+		target->registered = true;
 }
 
-static void isns_portals_set_registered(uint8_t *ip_addr, uint32_t port)
+static bool portal_is_solely_used(const struct portal *portal,
+				  const struct target *target)
 {
-	int af;
-	char ip_str[INET6_ADDRSTRLEN];
-	struct portal *portal;
+	struct target *tgt;
 
-	isns_ip_addr_get(ip_addr, &af, ip_str);
-	portal = portal_find(af, ip_str, port);
-	if (portal)
-		portal->registered = true;
+	assert(target_has_portal(target, portal));
 
-	/*
-	 * If the IP address is the local IP address, also mark the
-	 * default portal as registered.
-	 */
-	if (memcmp(ip_addr, ip, 16) == 0) {
-		strncpy(ip_str, af == AF_INET ? "0.0.0.0" : "::", INET6_ADDRSTRLEN);
-		ip_str[INET6_ADDRSTRLEN - 1] = '\0';
-		portal = portal_find(af, ip_str, port);
-		if (portal)
-			portal->registered = true;
+	list_for_each(&targets, tgt, node) {
+		if (tgt == target)
+			continue;
+		if (tgt->registered && target_has_portal(tgt, portal))
+			return false;
 	}
+
+	return true;
 }
 
+#define TGT_REG_BUFSIZE		8192
+#define TGT_REG_BUFTHRESH	(TGT_REG_BUFSIZE - 256)
+/*
+ * isns_target_register_flush - flush PDU to isns server if necessary.
+ *
+ * Send target register PDU once buffer threshold exceeded and reset
+ * buffer to build the next continuation PDU.
+ *
+ * Returns length flushed or < 0 for error.
+ */
+static int isns_target_register_flush(struct isns_tlv **tlv, char *buf,
+		size_t bufsize, uint16_t *length, uint16_t *flags,
+		uint16_t *sequence)
+{
+	struct isns_hdr *hdr = (struct isns_hdr *) buf;
+	int err;
+
+	if (*length < TGT_REG_BUFTHRESH)
+		return 0;
+	isns_hdr_init(hdr, ISNS_FUNC_DEV_ATTR_REG, *length, *flags,
+		      transaction, *sequence);
+	log_print(LOG_DEBUG, "flushing seq %u, length %d", *sequence, *length);
+	err = write(isns_fd, buf, *length + sizeof(struct isns_hdr));
+	if (err < 0)
+		log_print(LOG_ERR, "%s %d: %s", __func__, __LINE__,
+			  strerror(errno));
+	*flags &= ~ISNS_FLAG_FIRST_PDU;
+	(*sequence)++;
+	memset(buf, 0, bufsize);
+	*tlv = (struct isns_tlv *) hdr->pdu;
+	*length = 0;
+	return err;
+}
+
+/*
+ * isns_target_register - build / send PDU(s) to register target(s).
+ *
+ * An unknown amount of target groups and portals could be sent for
+ * registration to the isns server.  The open-isns server can only
+ * handle messages of up to 8192 bytes.  Anything larger needs to be
+ * broken into multiple PDUs with proper use of ISNS_FLAG_FIRST_PDU
+ * and ISNS_FLAG_LAST_PDU flags, the same transaction id and an
+ * incrementing PDU sequence number.
+ *
+ * For each attribute appended to the message buffer, once a threshold
+ * is crossed, send it over the socket, clear the buffer, and build the
+ * continuation PDUs until completes.
+ */
 static int isns_target_register(const struct target *target)
 {
-	char buf[4096];
-	uint16_t flags = 0, length = 0;
+	char buf[TGT_REG_BUFSIZE];
+	uint16_t flags = ISNS_FLAG_CLIENT | ISNS_FLAG_FIRST_PDU, length = 0;
+	uint16_t sequence = 0;
 	struct isns_hdr *hdr = (struct isns_hdr *) buf;
 	struct isns_tlv *tlv;
 	struct target *tgt;
@@ -488,6 +529,9 @@ static int isns_target_register(const struct target *target)
 	int err;
 	bool all_targets = target == ALL_TARGETS;
 	struct isns_query *query;
+
+	if (!all_targets && target->registered)
+		flags |= ISNS_FLAG_REPLACE;
 
 	if (all_targets) {
 		if (list_empty(&targets))
@@ -521,18 +565,29 @@ static int isns_target_register(const struct target *target)
 
 	/* Register the portals. */
 	list_for_each(&portals, portal, node) {
-		if (!tgt_has_portal(target, portal) && !all_targets)
+		if (!target_has_portal(target, portal) && !all_targets)
 			continue;
 
-		if (portal->registered)
+		/*
+		 * The Microsoft iSNS server returns an "invalid
+		 * update" error if "an object specified in a
+		 * DevAttrReg request to update an Entity already
+		 * exists in another Entity".
+		 *
+		 * https://docs.microsoft.com/en-us/previous-versions/windows/hardware/design/dn653564(v=vs.85)#invalid-update-status-code-14
+		 */
+		if (!portal_is_solely_used(portal, target))
 			continue;
 
 		uint32_t port = htonl(portal->port);
 		uint8_t ip_addr[16];
 		isns_ip_addr_set(portal, ip_addr);
 
-		length += isns_tlv_set(&tlv, ISNS_ATTR_PORTAL_IP_ADDRESS, 16, ip_addr);
+		length += isns_tlv_set(&tlv, ISNS_ATTR_PORTAL_IP_ADDRESS, 16,
+				       ip_addr);
 		length += isns_tlv_set(&tlv, ISNS_ATTR_PORTAL_PORT, 4, &port);
+		isns_target_register_flush(&tlv, &buf[0], sizeof(buf),
+					   &length, &flags, &sequence);
 	}
 
 	list_for_each(&targets, tgt, node) {
@@ -544,13 +599,18 @@ static int isns_target_register(const struct target *target)
 					      tgt->name);
 		length += isns_tlv_set(&tlv, ISNS_ATTR_ISCSI_NODE_TYPE,
 				       sizeof(node), &node);
+		isns_target_register_flush(&tlv, &buf[0], sizeof(buf),
+					   &length, &flags, &sequence);
 
 		/* Register the TPGs. */
 		list_for_each(&tgt->tpgs, tpg, node) {
-			uint32_t tag = htonl(tpg->tag);
+			if (list_empty(&tpg->portals))
+				continue;
 
-			length += isns_tlv_set_string(&tlv, ISNS_ATTR_PG_ISCSI_NAME,
-						      tgt->name);
+			length += isns_tlv_set_string(&tlv,
+					ISNS_ATTR_PG_ISCSI_NAME, tgt->name);
+			isns_target_register_flush(&tlv, &buf[0], sizeof(buf),
+					&length, &flags, &sequence);
 
 			list_for_each(&portals, portal, node) {
 				if (!tpg_has_portal(tpg, portal))
@@ -560,20 +620,30 @@ static int isns_target_register(const struct target *target)
 				uint8_t ip_addr[16];
 				isns_ip_addr_set(portal, ip_addr);
 
-				length += isns_tlv_set(&tlv, ISNS_ATTR_PG_PORTAL_IP_ADDRESS,
-						       sizeof(ip_addr), &ip_addr);
-				length += isns_tlv_set(&tlv, ISNS_ATTR_PG_PORTAL_PORT,
-						       sizeof(port), &port);
+				length += isns_tlv_set(&tlv,
+						ISNS_ATTR_PG_PORTAL_IP_ADDRESS,
+						sizeof(ip_addr), &ip_addr);
+				length += isns_tlv_set(&tlv,
+						ISNS_ATTR_PG_PORTAL_PORT,
+						sizeof(port), &port);
+				isns_target_register_flush(&tlv, &buf[0],
+					sizeof(buf), &length, &flags,
+					&sequence);
 			}
+			uint32_t tag = htonl(tpg->tag);
 			length += isns_tlv_set(&tlv, ISNS_ATTR_PG_TAG,
 					       sizeof(tag), &tag);
+			isns_target_register_flush(&tlv, &buf[0], sizeof(buf),
+						   &length, &flags, &sequence);
 		}
 	}
 
-	flags |= ISNS_FLAG_CLIENT | ISNS_FLAG_LAST_PDU | ISNS_FLAG_FIRST_PDU;
+	flags |= ISNS_FLAG_LAST_PDU;
 	isns_hdr_init(hdr, ISNS_FUNC_DEV_ATTR_REG, length, flags,
-		      transaction, 0);
+		      transaction, sequence);
 
+	log_print(LOG_DEBUG, "sending last PDU seq %u, length %d",
+		  sequence, length);
 	err = write(isns_fd, buf, length + sizeof(struct isns_hdr));
 	if (err < 0)
 		log_print(LOG_ERR, "%s %d: %s", __func__, __LINE__, strerror(errno));
@@ -794,24 +864,32 @@ static void isns_rsp_handle(const struct isns_hdr *hdr)
 {
 	struct isns_tlv *tlv;
 	uint16_t length = ntohs(hdr->length);
+	uint16_t flags = ntohs(hdr->flags);
 	uint16_t transaction = ntohs(hdr->transaction);
-	uint32_t status = ntohl(hdr->pdu[0]);
+	uint32_t status;
 	struct isns_query *query;
-	char *name = NULL;
+	char *iscsi_name = NULL;
 	uint8_t ip_addr[16];
-	uint32_t port;
 	uint32_t period;
 
-	query = isns_query_pop(transaction);
+	/* Only pop the query from the list if the last PDU is received. */
+	if (flags & ISNS_FLAG_LAST_PDU)
+		query = isns_query_pop(transaction);
+	else
+		query = isns_query_find(transaction);
 	if (!query) {
 		log_print(LOG_ERR, "unknown transaction %u", transaction);
 		return;
 	}
 
-	if (status) {
-		log_print(LOG_ERR, "error in response (status = %" PRIu32 ")",
-			  status);
-		goto free_query;
+	if (flags & ISNS_FLAG_FIRST_PDU) {
+		status = ntohl(hdr->pdu[0]);
+		if (status) {
+			log_print(LOG_ERR,
+				"error in response (status = %" PRIu32 ")",
+				status);
+			goto free_query;
+		}
 	}
 
 	if (query->name[0] == '\0') {
@@ -826,13 +904,17 @@ static void isns_rsp_handle(const struct isns_hdr *hdr)
 		goto free_query;
 	}
 
-	/* skip status */
-	tlv = (struct isns_tlv *) ((char *) hdr->pdu + 4);
+	/* Skip status on the first PDU. */
+	if (flags & ISNS_FLAG_FIRST_PDU) {
+		tlv = (struct isns_tlv *) ((char *) hdr->pdu + 4);
 
-	if (length < 4)
-		goto free_query;
+		if (length < 4)
+			goto free_query;
 
-	length -= 4;
+		length -= 4;
+	} else {
+		tlv = (struct isns_tlv *)hdr->pdu;
+	}
 
 	while (length) {
 		uint32_t tag = ntohl(tlv->tag);
@@ -846,38 +928,40 @@ static void isns_rsp_handle(const struct isns_hdr *hdr)
 		case ISNS_ATTR_ENTITY_IDENTIFIER:
 			break;
 		case ISNS_ATTR_REGISTRATION_PERIOD:
+			if (vlen != 4)
+				break;
 			period = ntohl(*(tlv->value));
 			isns_registration_set_period(period);
 			break;
 		case ISNS_ATTR_ISCSI_NAME:
-			if (vlen) {
-				size_t slen = vlen - 1;
-
-				if (slen >= ISCSI_NAME_SIZE)
-					slen = ISCSI_NAME_SIZE - 1;
-
-				*((char *) tlv->value + slen) = 0;
-
-				name = (char *) tlv->value;
-			} else
-				name = NULL;
+			if (vlen == 0) {
+				iscsi_name = NULL;
+				break;
+			}
+			size_t slen = vlen - 1;
+			if (slen >= ISCSI_NAME_SIZE)
+				slen = ISCSI_NAME_SIZE - 1;
+			*((char *) tlv->value + slen) = '\0';
+			iscsi_name = (char *) tlv->value;
+			isns_target_set_registered(iscsi_name);
 			break;
 		case ISNS_ATTR_ISCSI_NODE_TYPE:
-			if (vlen == 4 && name) {
-				uint32_t node_type = ntohl(*(tlv->value));
-				switch (node_type) {
-				case ISNS_NODE_CONTROL:
-					log_print(LOG_DEBUG, "%s is a control node", name);
-					break;
-				case ISNS_NODE_INITIATOR:
-					log_print(LOG_DEBUG, "%s is an initiator", name);
-					break;
-				case ISNS_NODE_TARGET:
-					log_print(LOG_DEBUG, "%s is a target", name);
-					break;
-				}
-			} else
-				name = NULL;
+			if (vlen != 4)
+				break;
+			if (!iscsi_name)
+				break;
+			uint32_t node_type = ntohl(*(tlv->value));
+			switch (node_type) {
+			case ISNS_NODE_CONTROL:
+				log_print(LOG_DEBUG, "%s is a control node", iscsi_name);
+				break;
+			case ISNS_NODE_INITIATOR:
+				log_print(LOG_DEBUG, "%s is an initiator", iscsi_name);
+				break;
+			case ISNS_NODE_TARGET:
+				log_print(LOG_DEBUG, "%s is a target", iscsi_name);
+				break;
+			}
 			break;
 		case ISNS_ATTR_PORTAL_IP_ADDRESS:
 			if (vlen == 16)
@@ -886,13 +970,11 @@ static void isns_rsp_handle(const struct isns_hdr *hdr)
 				memset(ip_addr, 0, 16);
 			break;
 		case ISNS_ATTR_PORTAL_PORT:
-			if (vlen == 4) {
-				port = ntohl(*(tlv->value));
-				isns_portals_set_registered(ip_addr, port);
-			}
+			if (vlen != 4)
+				break;
 			break;
 		default:
-			name = NULL;
+			iscsi_name = NULL;
 			break;
 		}
 
@@ -901,7 +983,8 @@ static void isns_rsp_handle(const struct isns_hdr *hdr)
 	}
 
 free_query:
-	free(query);
+	if (flags & ISNS_FLAG_LAST_PDU)
+		free(query);
 }
 
 int isns_handle(void)

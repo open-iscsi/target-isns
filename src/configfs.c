@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2013
- * Christophe Vu-Brugier <cvubrugier@yahoo.fr>
+ * Christophe Vu-Brugier <cvubrugier@fastmail.fm>
  *
  * SPDX-License-Identifier:	GPL-2.0+
  */
@@ -47,29 +47,20 @@
 
 #include "isns.h"
 #include "log.h"
+#include "util.h"
 
-#define CONFIGFS_ISCSI_PATH	"/sys/kernel/config/target/iscsi"
 #define INOTIFY_MASK		(IN_CREATE | IN_DELETE | IN_MODIFY)
 #define INOTIFY_BUF_LEN		(16 * (sizeof(struct inotify_event) + NAME_MAX + 1))
 
 
 LIST_HEAD(targets);
 LIST_HEAD(portals);
-LIST_HEAD(tpg_portals);
 static int inotify_fd = -1;
-
-
-/* Associative entity between a TPG and a portal */
-struct tpg_portal {
-	struct list_node node;  /* Member of the "tpg_portals" list */
-	struct tpg *tpg;
-	struct portal *portal;
-};
 
 
 bool configfs_iscsi_path_exists(void)
 {
-	DIR *dir = opendir(CONFIGFS_ISCSI_PATH);
+	DIR *dir = opendir(config.configfs_iscsi_path);
 
 	if (dir) {
 		closedir(dir);
@@ -120,10 +111,11 @@ static struct target *configfs_target_init(const char *name)
 	if ((tgt = malloc(sizeof(struct target))) == NULL)
 		return NULL;
 
-	snprintf(path, sizeof(path), CONFIGFS_ISCSI_PATH "/%s", name);
+	snprintf(path, sizeof(path), "%s/%s", config.configfs_iscsi_path, name);
 	strncpy(tgt->name, name, ISCSI_NAME_SIZE);
 	tgt->name[ISCSI_NAME_SIZE - 1] = '\0';
 	tgt->exists = false;
+	tgt->registered = false;
 	tgt->registration_pending = false;
 	tgt->watch_fd = inotify_add_watch(inotify_fd, path, INOTIFY_MASK);
 	list_head_init(&tgt->tpgs);
@@ -140,8 +132,8 @@ static bool configfs_tpg_enabled(const struct target *tgt, uint16_t tpg_tag)
 	bool enabled = false;
 
 	snprintf(path, sizeof(path),
-		 CONFIGFS_ISCSI_PATH "/%s/tpgt_%hu/enable",
-		 tgt->name, tpg_tag);
+		 "%s/%s/tpgt_%hu/enable",
+		 config.configfs_iscsi_path, tgt->name, tpg_tag);
 	if ((fd = open(path, O_RDONLY)) == -1)
 		return false;
 	if ((nr = read(fd, buf, sizeof(buf))) != -1) {
@@ -158,14 +150,15 @@ static struct tpg *configfs_tpg_init(struct target *tgt, uint16_t tpg_tag)
 	char path[512];
 	char np_path[512];
 
-	snprintf(path, sizeof(path), CONFIGFS_ISCSI_PATH "/%s/tpgt_%hu",
-		 tgt->name, tpg_tag);
+	snprintf(path, sizeof(path), "%s/%s/tpgt_%hu",
+		 config.configfs_iscsi_path, tgt->name, tpg_tag);
 	snprintf(np_path, sizeof(np_path), "%s/np", path);
 	tpg->watch_fd = inotify_add_watch(inotify_fd, path, INOTIFY_MASK);
 	tpg->np_watch_fd = inotify_add_watch(inotify_fd, np_path, INOTIFY_MASK);
 	tpg->tag = tpg_tag;
 	tpg->enabled = configfs_tpg_enabled(tgt, tpg_tag);
 	tpg->exists = false;
+	list_head_init(&tpg->portals);
 	list_add(&tgt->tpgs, &tpg->node);
 
 	return tpg;
@@ -211,34 +204,32 @@ static struct portal *configfs_portal_init(int af, const char *ip_addr, uint16_t
 	strncpy(portal->ip_addr, ip_addr, INET6_ADDRSTRLEN);
 	portal->ip_addr[INET6_ADDRSTRLEN - 1] = '\0';
 	portal->port = port;
-	portal->registered = false;
 	list_add(&portals, &portal->node);
 
 	return portal;
 }
 
-static struct tpg_portal *configfs_tpg_portal_init(struct tpg *tpg,
-						   struct portal *portal)
+static struct portal_ref *configfs_portal_ref_init(struct tpg *tpg, struct portal *portal)
 {
-	struct tpg_portal *tpg_portal = malloc(sizeof(struct tpg_portal));
-	if (!tpg_portal)
+	struct portal_ref *portal_ref = malloc(sizeof(struct portal_ref));
+	if (!portal_ref)
 		return NULL;
 
-	tpg_portal->tpg = tpg;
-	tpg_portal->portal = portal;
-	list_add(&tpg_portals, &tpg_portal->node);
+	portal_ref->portal = portal;
+	portal_ref->exists = false;
+	list_add(&tpg->portals, &portal_ref->node);
 
-	return tpg_portal;
+	return portal_ref;
 }
 
-static struct tpg_portal *configfs_tpg_portal_find(const struct tpg *tpg,
+static struct portal_ref *configfs_portal_ref_find(const struct tpg *tpg,
 						   const struct portal *portal)
 {
-	struct tpg_portal *tpg_portal;
+	struct portal_ref *portal_ref;
 
-	list_for_each(&tpg_portals, tpg_portal, node) {
-		if (tpg_portal->tpg == tpg && tpg_portal->portal == portal)
-			return tpg_portal;
+	list_for_each(&tpg->portals, portal_ref, node) {
+		if (portal_ref->portal == portal)
+			return portal_ref;
 	}
 
 	return NULL;
@@ -249,15 +240,20 @@ static int configfs_tpg_update(struct target *tgt, struct tpg *tpg)
 	DIR *np_dir;
 	struct dirent *dirent;
 	char np_path[512];
+	struct portal_ref *portal_ref, *portal_ref_next;
 
 	snprintf(np_path, sizeof(np_path),
-		 CONFIGFS_ISCSI_PATH "/%s/tpgt_%hu/np",
-		 tgt->name, tpg->tag);
+		 "%s/%s/tpgt_%hu/np",
+		 config.configfs_iscsi_path, tgt->name, tpg->tag);
 	np_dir = opendir(np_path);
 	if (!np_dir)
 		return -ENOENT;
 
 	tpg->enabled = configfs_tpg_enabled(tgt, tpg->tag);
+
+	list_for_each(&tpg->portals, portal_ref, node) {
+		portal_ref->exists = false;
+	}
 
 	while ((dirent = readdir(np_dir))) {
 		if (streq(dirent->d_name, ".") || streq(dirent->d_name, ".."))
@@ -275,13 +271,22 @@ static int configfs_tpg_update(struct target *tgt, struct tpg *tpg)
 			assert(portal);
 		}
 
-		struct tpg_portal *tpg_portal = configfs_tpg_portal_find(tpg, portal);
-		if (!tpg_portal) {
-			tpg_portal = configfs_tpg_portal_init(tpg, portal);
-			assert(tpg_portal);
+		struct portal_ref *portal_ref = configfs_portal_ref_find(tpg, portal);
+		if (!portal_ref) {
+			portal_ref = configfs_portal_ref_init(tpg, portal);
+			assert(portal_ref);
 		}
+		portal_ref->exists = true;
 	}
 	closedir(np_dir);
+
+	list_for_each_safe(&tpg->portals, portal_ref, portal_ref_next, node) {
+		if (portal_ref->exists)
+			continue;
+
+		list_del(&portal_ref->node);
+		free(portal_ref);
+	}
 
 	return 0;
 }
@@ -291,11 +296,11 @@ static int configfs_target_update(struct target *tgt)
 	DIR *tgt_dir;
 	struct dirent *dirent;
 	struct tpg *tpg, *tpg_next;
-	struct tpg_portal *tpg_portal, *tpg_portal_next;
 	uint16_t tpg_tag;
 	char tgt_path[512];
 
-	snprintf(tgt_path, sizeof(tgt_path), CONFIGFS_ISCSI_PATH "/%s", tgt->name);
+	snprintf(tgt_path, sizeof(tgt_path), "%s/%s",
+		 config.configfs_iscsi_path, tgt->name);
 	tgt_dir = opendir(tgt_path);
 	if (!tgt_dir)
 		return -ENOENT;
@@ -319,14 +324,14 @@ static int configfs_target_update(struct target *tgt)
 	closedir(tgt_dir);
 
 	list_for_each_safe(&tgt->tpgs, tpg, tpg_next, node) {
+		struct portal_ref *portal_ref, *portal_ref_next;
+
 		if (tpg->exists)
 			continue;
 
-		list_for_each_safe(&tpg_portals, tpg_portal, tpg_portal_next, node) {
-			if (tpg_portal->tpg == tpg) {
-				list_del(&tpg_portal->node);
-				free(tpg_portal);
-			}
+		list_for_each_safe(&tpg->portals, portal_ref, portal_ref_next, node) {
+			list_del(&portal_ref->node);
+			free(portal_ref);
 		}
 
 		list_del(&tpg->node);
@@ -346,10 +351,11 @@ int configfs_inotify_init(void)
 	if ((inotify_fd = inotify_init()) == -1)
 		return -1;
 
-	if (inotify_add_watch(inotify_fd, CONFIGFS_ISCSI_PATH, INOTIFY_MASK) == -1)
+	if (inotify_add_watch(inotify_fd, config.configfs_iscsi_path,
+			      INOTIFY_MASK) == -1)
 		goto out;
 
-	iscsi_dir = opendir(CONFIGFS_ISCSI_PATH);
+	iscsi_dir = opendir(config.configfs_iscsi_path);
 	if (!iscsi_dir)
 		goto out;
 
@@ -390,19 +396,15 @@ void configfs_inotify_cleanup(void)
 {
 	struct target *tgt, *tgt_next;
 	struct tpg *tpg, *tpg_next;
+	struct portal_ref *portal_ref, *portal_ref_next;
 	struct portal *portal, *portal_next;
-	struct tpg_portal *tpg_portal, *tpg_portal_next;
 
-	list_for_each_safe(&tpg_portals, tpg_portal, tpg_portal_next, node) {
-		list_del(&tpg_portal->node);
-		free(tpg_portal);
-	}
-	list_for_each_safe(&portals, portal, portal_next, node) {
-		list_del(&portal->node);
-		free(portal);
-	}
 	list_for_each_safe(&targets, tgt, tgt_next, node) {
 		list_for_each_safe(&tgt->tpgs, tpg, tpg_next, node) {
+			list_for_each_safe(&tpg->portals, portal_ref, portal_ref_next, node) {
+				list_del(&portal_ref->node);
+				free(portal_ref);
+			}
 			list_del(&tpg->node);
 			inotify_rm_watch(inotify_fd, tpg->watch_fd);
 			inotify_rm_watch(inotify_fd, tpg->np_watch_fd);
@@ -412,6 +414,12 @@ void configfs_inotify_cleanup(void)
 		inotify_rm_watch(inotify_fd, tgt->watch_fd);
 		free(tgt);
 	}
+
+	list_for_each_safe(&portals, portal, portal_next, node) {
+		list_del(&portal->node);
+		free(portal);
+	}
+
 	close(inotify_fd);
 }
 
@@ -419,8 +427,7 @@ void configfs_show(void)
 {
 	struct target *tgt;
 	struct tpg *tpg;
-	struct tpg_portal *tpg_portal;
-	struct portal *portal;
+	struct portal_ref *portal_ref;
 
 	list_for_each(&targets, tgt, node) {
 		log_print(LOG_DEBUG, "target: name = %s", tgt->name);
@@ -428,10 +435,8 @@ void configfs_show(void)
 			log_print(LOG_DEBUG, "  tpg: tag = %hu, enabled = %d",
 				  tpg->tag, tpg->enabled);
 
-			list_for_each(&tpg_portals, tpg_portal, node) {
-				if (tpg_portal->tpg != tpg)
-					continue;
-				portal = tpg_portal->portal;
+			list_for_each(&tpg->portals, portal_ref, node) {
+				const struct portal *portal = portal_ref->portal;
 				log_print(LOG_DEBUG, "    portal: af = IPv%d, ip_addr = %s, port = %hu",
 					  portal->af == AF_INET ? 4 : 6, portal->ip_addr, portal->port);
 			}
@@ -501,6 +506,8 @@ static void configfs_tpg_subtree_handle(const struct inotify_event *event)
 {
 	struct target *tgt;
 	struct tpg *tpg = NULL;
+	uint16_t tpg_tag;
+	struct portal_ref *portal_ref, *portal_ref_next;
 
 	list_for_each(&targets, tgt, node) {
 		tpg = tpg_find_by_watch(tgt, event->wd);
@@ -510,10 +517,22 @@ static void configfs_tpg_subtree_handle(const struct inotify_event *event)
 	if (!tpg)
 		return;
 
-	configfs_tpg_update(tgt, tpg);
+	tpg_tag = tpg->tag;
+
+	if (configfs_tpg_update(tgt, tpg) == -ENOENT) {
+		list_for_each_safe(&tpg->portals, portal_ref, portal_ref_next, node) {
+			list_del(&portal_ref->node);
+			free(portal_ref);
+		}
+		list_del(&tpg->node);
+		inotify_rm_watch(inotify_fd, tpg->watch_fd);
+		inotify_rm_watch(inotify_fd, tpg->np_watch_fd);
+		free(tpg);
+	}
+
 	isns_target_register_later(tgt);
 	log_print(LOG_DEBUG, "inotify[%c] %s/tpg%hu/%s",
-		  inotify_event_str(event), tgt->name, tpg->tag, event->name);
+		  inotify_event_str(event), tgt->name, tpg_tag, event->name);
 }
 
 void configfs_inotify_events_handle(void)
@@ -585,16 +604,10 @@ struct portal *portal_find(int af, const char *ip_addr, uint16_t port)
 
 bool tpg_has_portal(const struct tpg *tpg, const struct portal *portal)
 {
-	struct tpg_portal *tpg_portal;
-
-	list_for_each(&tpg_portals, tpg_portal, node) {
-		if (configfs_tpg_portal_find(tpg, portal))
-			return true;
-	}
-	return false;
+	return configfs_portal_ref_find(tpg, portal) != NULL;
 }
 
-bool tgt_has_portal(const struct target *target, const struct portal *portal)
+bool target_has_portal(const struct target *target, const struct portal *portal)
 {
 	struct tpg *tpg;
 

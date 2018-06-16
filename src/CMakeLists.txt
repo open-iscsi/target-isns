@@ -1,6 +1,6 @@
 #
 # (C) Copyright 2013
-# Christophe Vu-Brugier <cvubrugier@yahoo.fr>
+# Christophe Vu-Brugier <cvubrugier@fastmail.fm>
 #
 # SPDX-License-Identifier:	GPL-2.0+
 #
@@ -22,6 +22,7 @@ add_executable(target-isns
   log.c
   util.c
   target-isns.c)
+set_property(TARGET target-isns PROPERTY C_STANDARD 99)
 target_link_libraries(target-isns
   ccan)
 install(TARGETS target-isns RUNTIME DESTINATION bin)

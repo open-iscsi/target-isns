@@ -1,6 +1,6 @@
 /*
  * (C) Copyright 2013
- * Christophe Vu-Brugier <cvubrugier@yahoo.fr>
+ * Christophe Vu-Brugier <cvubrugier@fastmail.fm>
  *
  * SPDX-License-Identifier:	GPL-2.0+
  */
@@ -44,12 +44,13 @@ static struct epoll_event epoll_events[EPOLL_MAX_FD];
 static void print_usage(void)
 {
 	printf("Usage: " PROGNAME " [OPTIONS]\n"
-	       "  -i, --isns-server  Set the IP address of the iSNS server.\n"
-	       "  -p, --isns-port    Set the remote port for iSNS server.\n"
-	       "  -d, --debug        Increase the debugging level (implies -f).\n"
-	       "  -f, --foreground   Run in the foreground.\n"
-	       "  -v, --version      Print version information.\n"
-	       "  -h, --help         Print this message.\n");
+	       "  -i, --isns-server          Set the IP address of the iSNS server.\n"
+	       "  -p, --isns-port            Set the remote port for iSNS server.\n"
+	       "  -d, --debug                Increase the debugging level (implies -f).\n"
+	       "  -f, --foreground           Run in the foreground.\n"
+	       "  -s, --configfs-iscsi-path  Use alternate sys configfs iscsi path.\n"
+	       "  -v, --version              Print version information.\n"
+	       "  -h, --help                 Print this message.\n");
 }
 
 static void epoll_init_fds(void)
@@ -113,15 +114,16 @@ static bool signal_is_quit(int fd)
 
 int main(int argc, char *argv[])
 {
-	char optstring[] = "i:p:dfvh";
+	char optstring[] = "i:p:dfs:vh";
 	struct option longopts[] = {
-		{"isns-server", 1, NULL, 'i'},
-		{"isns-port",   1, NULL, 'p'},
-		{"debug",       0, NULL, 'd'},
-		{"foreground",  0, NULL, 'f'},
-		{"version",     0, NULL, 'v'},
-		{"help",        0, NULL, 'h'},
-		{NULL,          0, NULL, 0}
+		{"isns-server",		1, NULL, 'i'},
+		{"isns-port",		1, NULL, 'p'},
+		{"debug",		0, NULL, 'd'},
+		{"foreground",		0, NULL, 'f'},
+		{"configfs-iscsi-path",	1, NULL, 's'},
+		{"version",		0, NULL, 'v'},
+		{"help",		0, NULL, 'h'},
+		{NULL,			0, NULL, 0}
         };
 	int option;
 	int longindex = 0;
@@ -130,6 +132,7 @@ int main(int argc, char *argv[])
 	ssize_t nr_events;
 	bool daemon = true;
 	int ret = EXIT_FAILURE;
+	size_t configsz;
 
 	conffile_read();
 
@@ -137,10 +140,9 @@ int main(int argc, char *argv[])
 				     &longindex)) != -1) {
 		switch (option) {
 		case 'i':
-			;
-			const size_t sz = sizeof(config.isns_server);
-			strncpy(config.isns_server, optarg, sz);
-			config.isns_server[sz - 1] = '\0';
+			configsz = sizeof(config.isns_server);
+			strncpy(config.isns_server, optarg, configsz);
+			config.isns_server[configsz - 1] = '\0';
 			break;
 		case 'p':
 			sscanf(optarg, "%hu", &config.isns_port);
@@ -151,6 +153,11 @@ int main(int argc, char *argv[])
 			break;
 		case 'f':
 			daemon = false;
+			break;
+		case 's':
+			configsz = sizeof(config.configfs_iscsi_path);
+			strncpy(config.configfs_iscsi_path, optarg, configsz);
+			config.configfs_iscsi_path[configsz - 1] = '\0';
 			break;
 		case 'v':
 			printf(PROGNAME " version " TARGET_ISNS_VERSION "\n");
@@ -171,6 +178,9 @@ int main(int argc, char *argv[])
 		fprintf(stderr,
 			"Error: configfs is not mounted or the "
 			"target and iSCSI modules are not loaded.\n");
+		fprintf(stderr,
+			"Error: %s missing.\n",
+			config.configfs_iscsi_path);
 		exit(EXIT_FAILURE);
 	}
 

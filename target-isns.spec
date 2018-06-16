@@ -6,7 +6,7 @@ Source:     %{name}-%{version}.tar.gz
 License:    GPLv2+
 ExclusiveOS: linux
 Group:      System Environment/Kernel
-URL:        https://github.com/cvubrugier/target-isns
+URL:        https://github.com/open-iscsi/target-isns
 BuildRoot:  %{_tmppath}/%{name}-%{version}-build
 BuildRequires: gcc flex glibc-devel make
 BuildRequires: cmake
@@ -15,13 +15,13 @@ BuildRequires: systemd
 
 %description
 Target-isns is an Internet Storage Name Service (iSNS) client for the
-Linux LIO iSCSI target. It allows to register LIO iSCSI targets to an
-iSNS server.
+Linux LIO iSCSI target. It allows registering LIO iSCSI targets with
+an iSNS server.
 
 The iSNS protocol is specified in
 [RFC 4171](http://tools.ietf.org/html/rfc4171) and its purpose is to
 make easier to discover, manage, and configure iSCSI devices. With
-iSNS, iSCSI targets can be registered to a central iSNS server and
+iSNS, iSCSI targets can be registered with a central iSNS server and
 initiators can be configured to discover the targets by asking the
 iSNS server.
 
