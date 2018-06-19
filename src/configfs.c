@@ -112,9 +112,10 @@ static struct target *configfs_target_init(const char *name)
 
 	if ((tgt = malloc(sizeof(struct target))) == NULL)
 		return NULL;
-
-	if (asprintf(&path, "%s/%s", config.configfs_iscsi_path, name) < 0)
+	if (asprintf(&path, "%s/%s", config.configfs_iscsi_path, name) < 0) {
+		free(tgt);
 		return NULL;
+	}
 	strncpy(tgt->name, name, ISCSI_NAME_SIZE);
 	tgt->name[ISCSI_NAME_SIZE - 1] = '\0';
 	tgt->exists = false;
@@ -133,38 +134,44 @@ static bool configfs_tpg_enabled(const struct target *tgt, uint16_t tpg_tag)
 	int fd = -1;
 	ssize_t nr;
 	char buf[8];
-	char *path = NULL;
+	char *path;
 	bool enabled = false;
 
 	if (asprintf(&path, "%s/%s/tpgt_%hu/enable",
 		     config.configfs_iscsi_path, tgt->name, tpg_tag) < 0)
-		goto dun;
-	if ((fd = open(path, O_RDONLY)) == -1)
-		goto dun;
+		return false;
+	if ((fd = open(path, O_RDONLY)) == -1) {
+		free(path);
+		return false;
+	}
+	free(path);
 	if ((nr = read(fd, buf, sizeof(buf))) != -1) {
 		enabled = buf[0] == '1';
 	}
-
-dun:
-	if (fd >= 0)
-		close(fd);
-	if (path)
-		free(path);
+	close(fd);
 
 	return enabled;
 }
 
 static struct tpg *configfs_tpg_init(struct target *tgt, uint16_t tpg_tag)
 {
-	struct tpg *tpg = malloc(sizeof(struct tpg));
+	struct tpg *tpg;
 	char *path;
 	char *np_path;
 
+	if ((tpg = malloc(sizeof(struct tpg))) == NULL)
+		return NULL;
 	if (asprintf(&path, "%s/%s/tpgt_%hu",
-		     config.configfs_iscsi_path, tgt->name, tpg_tag) < 0)
-		goto err_out;
-	if (asprintf(&np_path, "%s/np", path) < 0)
-		goto err_out;
+		     config.configfs_iscsi_path, tgt->name, tpg_tag) < 0) {
+		free(tpg);
+		return NULL;
+	}
+	if (asprintf(&np_path, "%s/np", path) < 0) {
+		free(path);
+		free(tpg);
+		return NULL;
+	}
+
 	tpg->watch_fd = inotify_add_watch(inotify_fd, path, INOTIFY_MASK);
 	tpg->np_watch_fd = inotify_add_watch(inotify_fd, np_path, INOTIFY_MASK);
 	tpg->tag = tpg_tag;
@@ -176,14 +183,6 @@ static struct tpg *configfs_tpg_init(struct target *tgt, uint16_t tpg_tag)
 	free(np_path);
 
 	return tpg;
-
-err_out:
-	if (path)
-		free(path);
-	if (np_path)
-		free(np_path);
-	free(tpg);
-	return NULL;
 }
 
 static int get_portal(const char *str, int *af, char *ip_addr, uint16_t *port)
