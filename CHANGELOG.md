@@ -6,6 +6,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.6.5] - 2018-06-20
+### Fixed
+- Fix registration of new targets after all existing targets are
+  removed (issue #38).
+- Fix invalid update error returned by the Microsoft iSNS server when
+  removing a portal (issue #40).
+- Fix string truncation and compilation with gcc 8. Contributed by Lee
+  Duncan.
+
 ## [0.6.4] - 2018-01-20
 ### Fixed
 - Fix segfault caused by large PDUs by generating multiple PDUs for
