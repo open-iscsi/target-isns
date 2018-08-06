@@ -448,23 +448,6 @@ static void isns_target_set_registered(const char *iscsi_name)
 		target->registered = true;
 }
 
-static bool portal_is_solely_used(const struct portal *portal,
-				  const struct target *target)
-{
-	struct target *tgt;
-
-	assert(target_has_portal(target, portal));
-
-	list_for_each(&targets, tgt, node) {
-		if (tgt == target)
-			continue;
-		if (tgt->registered && target_has_portal(tgt, portal))
-			return false;
-	}
-
-	return true;
-}
-
 #define TGT_REG_BUFSIZE		8192
 #define TGT_REG_BUFTHRESH	(TGT_REG_BUFSIZE - 256)
 /*
@@ -568,17 +551,6 @@ static int isns_target_register(const struct target *target)
 		if (!target_has_portal(target, portal) && !all_targets)
 			continue;
 
-		/*
-		 * The Microsoft iSNS server returns an "invalid
-		 * update" error if "an object specified in a
-		 * DevAttrReg request to update an Entity already
-		 * exists in another Entity".
-		 *
-		 * https://docs.microsoft.com/en-us/previous-versions/windows/hardware/design/dn653564(v=vs.85)#invalid-update-status-code-14
-		 */
-		if (!portal_is_solely_used(portal, target))
-			continue;
-
 		uint32_t port = htonl(portal->port);
 		uint8_t ip_addr[16];
 		isns_ip_addr_set(portal, ip_addr);
@@ -591,9 +563,6 @@ static int isns_target_register(const struct target *target)
 	}
 
 	list_for_each(&targets, tgt, node) {
-		if (tgt != target && !all_targets)
-			continue;
-
 		/* Register the iSCSI target. */
 		length += isns_tlv_set_string(&tlv, ISNS_ATTR_ISCSI_NAME,
 					      tgt->name);
