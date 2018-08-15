@@ -580,11 +580,20 @@ static int isns_target_register(const struct target *target)
 					ISNS_ATTR_PG_ISCSI_NAME, tgt->name);
 			isns_target_register_flush(&tlv, &buf[0], sizeof(buf),
 					&length, &flags, &sequence);
-
+			
+			uint32_t tag = htonl(tpg->tag * 10);
+			
 			list_for_each(&portals, portal, node) {
-				if (!tpg_has_portal(tpg, portal))
-					continue;
-
+				if (tpg_has_portal(tpg, portal))
+				{
+					length += isns_tlv_set(&tlv, ISNS_ATTR_PG_TAG,
+					                       sizeof(tag), &tag);
+				}
+				else
+				{
+					length += isns_tlv_set(&tlv, ISNS_ATTR_PG_TAG,
+					                        0, 0);
+				}
 				uint32_t port = htonl(portal->port);
 				uint8_t ip_addr[16];
 				isns_ip_addr_set(portal, ip_addr);
@@ -599,11 +608,7 @@ static int isns_target_register(const struct target *target)
 					sizeof(buf), &length, &flags,
 					&sequence);
 			}
-			uint32_t tag = htonl(tpg->tag);
-			length += isns_tlv_set(&tlv, ISNS_ATTR_PG_TAG,
-					       sizeof(tag), &tag);
-			isns_target_register_flush(&tlv, &buf[0], sizeof(buf),
-						   &length, &flags, &sequence);
+
 		}
 	}
 
