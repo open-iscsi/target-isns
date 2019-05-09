@@ -40,9 +40,11 @@ containing a single target portal group:
 
     $ mkdir -p fake-iscsi-path/iqn.2018-01.org.example:disk1
     $ mkdir -p fake-iscsi-path/iqn.2018-01.org.example:disk1/tpgt_1
+    $ echo 1 > fake-iscsi-path/iqn.2018-01.org.example:disk1/tpgt_1/enable
     $ mkdir -p fake-iscsi-path/iqn.2018-01.org.example:disk1/tpgt_1/np
     $ mkdir -p fake-iscsi-path/iqn.2018-01.org.example:disk1/tpgt_1/np/0.0.0.0:3260
-    $ echo 1 > fake-iscsi-path/iqn.2018-01.org.example:disk1/tpgt_1/enable
+    $ mkdir -p fake-iscsi-path/iqn.2018-01.org.example:disk1/tpgt_1/param
+    $ echo 'LIO Target' > fake-iscsi-path/iqn.2018-01.org.example:disk1/tpgt_1/param/TargetAlias
 
 Then, you can start target-isns with the `--configfs-iscsi-path`
 option pointing to the fake configfs hierarchy:

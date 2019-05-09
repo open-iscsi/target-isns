@@ -27,11 +27,13 @@ struct target {
 struct tpg {
 	struct list_node node;  /* Member of a target->tpgs list */
 	uint16_t tag;
+	char alias[ISCSI_ALIAS_SIZE];
 	bool enabled;
 	bool exists;
 	struct list_head portals;
 	int watch_fd;
 	int np_watch_fd;
+	int param_watch_fd;
 };
 
 struct portal {
@@ -61,6 +63,8 @@ void configfs_show(void);
 void configfs_inotify_events_handle(void);
 
 struct target *target_find(const char *target_name);
+
+char *target_get_alias(const struct target *tgt);
 
 struct portal *portal_find(int af, const char *ip_addr, uint16_t port);
 
