@@ -25,7 +25,7 @@
  *   |   |   +-- np                     W   |   |   |
  *   |   |   |   +-- $IP:$PORT              |   |   +-- portal 1
  *   |   |   |   +-- $IP:$PORT              |   |   +-- portal 2
- *   |   |   +-- param                      |   |
+ *   |   |   +-- param                  W   |   |
  *   |   |       +-- TargetAlias            |   |
  *   |   +-- tpgt_N                     W   |   +-- tpg N
  *   +-- $IQN N                         W   +-- target N
@@ -58,7 +58,7 @@
 LIST_HEAD(targets);
 LIST_HEAD(portals);
 static int inotify_fd = -1;
-
+static const char LIO_TARGET_ALIAS[] = "LIO Target";
 
 bool configfs_iscsi_path_exists(void)
 {
@@ -82,6 +82,19 @@ static struct target *target_find_by_watch(int watch_fd)
 	return NULL;
 }
 
+char *target_get_alias(const struct target *tgt)
+{
+	struct tpg *tpg;
+
+	list_for_each(&tgt->tpgs, tpg, node) {
+		if (tpg->alias[0] == '\0' ||
+		    streq(tpg->alias, LIO_TARGET_ALIAS))
+			continue;
+		return tpg->alias;
+	}
+	return (char *) LIO_TARGET_ALIAS;
+}
+
 static struct tpg *tpg_find_by_tag(const struct target *tgt, uint16_t tpg_tag)
 {
 	struct tpg *tpg;
@@ -98,8 +111,9 @@ static struct tpg *tpg_find_by_watch(const struct target *tgt, int watch_fd)
 	struct tpg *tpg;
 
 	list_for_each(&tgt->tpgs, tpg, node) {
-		if (tpg->watch_fd == watch_fd ||
-		    tpg->np_watch_fd == watch_fd)
+		if (watch_fd == tpg->watch_fd ||
+		    watch_fd == tpg->np_watch_fd ||
+		    watch_fd == tpg->param_watch_fd)
 			return tpg;
 	}
 	return NULL;
@@ -131,7 +145,7 @@ static struct target *configfs_target_init(const char *name)
 
 static bool configfs_tpg_enabled(const struct target *tgt, uint16_t tpg_tag)
 {
-	int fd = -1;
+	int fd;
 	ssize_t nr;
 	char buf[8];
 	char *path;
@@ -153,11 +167,37 @@ static bool configfs_tpg_enabled(const struct target *tgt, uint16_t tpg_tag)
 	return enabled;
 }
 
+static void configfs_tpg_set_alias(const struct target *tgt, struct tpg *tpg)
+{
+	int fd;
+	ssize_t nr;
+	char *path;
+
+	memset(tpg->alias, 0, ISCSI_ALIAS_SIZE);
+
+	if (asprintf(&path, "%s/%s/tpgt_%hu/param/TargetAlias",
+		     config.configfs_iscsi_path, tgt->name, tpg->tag) < 0) {
+		return;
+	}
+	if ((fd = open(path, O_RDONLY)) == -1) {
+		free(path);
+		return;
+	}
+	free(path);
+	if ((nr = read(fd, tpg->alias, ISCSI_ALIAS_SIZE)) != -1) {
+		/* Remove trailing new line character. */
+		if (nr >= 1)
+			tpg->alias[nr - 1] = '\0';
+	}
+	close(fd);
+}
+
 static struct tpg *configfs_tpg_init(struct target *tgt, uint16_t tpg_tag)
 {
 	struct tpg *tpg;
 	char *path;
 	char *np_path;
+	char *param_path;
 
 	if ((tpg = malloc(sizeof(struct tpg))) == NULL)
 		return NULL;
@@ -171,16 +211,28 @@ static struct tpg *configfs_tpg_init(struct target *tgt, uint16_t tpg_tag)
 		free(tpg);
 		return NULL;
 	}
+	/* inotify reports no event when the "TargetAlias" file is watched.
+	 * Watch the parent "param" directory instead.
+	 */
+	if (asprintf(&param_path, "%s/param", path) < 0) {
+		free(np_path);
+		free(path);
+		free(tpg);
+		return NULL;
+	}
 
 	tpg->watch_fd = inotify_add_watch(inotify_fd, path, INOTIFY_MASK);
 	tpg->np_watch_fd = inotify_add_watch(inotify_fd, np_path, INOTIFY_MASK);
+	tpg->param_watch_fd = inotify_add_watch(inotify_fd, param_path, IN_CLOSE_WRITE);
 	tpg->tag = tpg_tag;
 	tpg->enabled = configfs_tpg_enabled(tgt, tpg_tag);
+	configfs_tpg_set_alias(tgt, tpg);
 	tpg->exists = false;
 	list_head_init(&tpg->portals);
 	list_add(&tgt->tpgs, &tpg->node);
 	free(path);
 	free(np_path);
+	free(param_path);
 
 	return tpg;
 }
@@ -273,6 +325,7 @@ static int configfs_tpg_update(struct target *tgt, struct tpg *tpg)
 		return -ENOENT;
 
 	tpg->enabled = configfs_tpg_enabled(tgt, tpg->tag);
+	configfs_tpg_set_alias(tgt, tpg);
 
 	list_for_each(&tpg->portals, portal_ref, node) {
 		portal_ref->exists = false;
@@ -437,6 +490,7 @@ void configfs_inotify_cleanup(void)
 			list_del(&tpg->node);
 			inotify_rm_watch(inotify_fd, tpg->watch_fd);
 			inotify_rm_watch(inotify_fd, tpg->np_watch_fd);
+			inotify_rm_watch(inotify_fd, tpg->param_watch_fd);
 			free(tpg);
 		}
 		list_del(&tgt->node);
@@ -459,7 +513,8 @@ void configfs_show(void)
 	struct portal_ref *portal_ref;
 
 	list_for_each(&targets, tgt, node) {
-		log_print(LOG_DEBUG, "target: name = %s", tgt->name);
+		log_print(LOG_DEBUG, "target: name = %s, alias = %s",
+			  tgt->name, target_get_alias(tgt));
 		list_for_each(&tgt->tpgs, tpg, node) {
 			log_print(LOG_DEBUG, "  tpg: tag = %hu, enabled = %d",
 				  tpg->tag, tpg->enabled);
@@ -481,6 +536,8 @@ static char inotify_event_str(const struct inotify_event *event)
 		return 'D';
 	else if (event->mask & IN_MODIFY)
 		return 'M';
+	else if (event->mask & IN_CLOSE_WRITE)
+		return 'W';
 	else
 		return '?';
 }
@@ -558,12 +615,32 @@ static void configfs_tpg_subtree_handle(const struct inotify_event *event)
 		list_del(&tpg->node);
 		inotify_rm_watch(inotify_fd, tpg->watch_fd);
 		inotify_rm_watch(inotify_fd, tpg->np_watch_fd);
+		inotify_rm_watch(inotify_fd, tpg->param_watch_fd);
 		free(tpg);
 	}
 
 	isns_target_register_later(tgt);
 	log_print(LOG_DEBUG, "inotify[%c] %s/tpg%hu/%s",
 		  inotify_event_str(event), tgt->name, tpg_tag, event->name);
+}
+
+static void configfs_param_alias_handle(const struct inotify_event *event)
+{
+	struct target *tgt;
+	struct tpg *tpg = NULL;
+
+	list_for_each(&targets, tgt, node) {
+		tpg = tpg_find_by_watch(tgt, event->wd);
+		if (tpg)
+			break;
+	}
+	if (!tpg)
+		return;
+
+	configfs_tpg_set_alias(tgt, tpg);
+	isns_target_register_later(tgt);
+	log_print(LOG_DEBUG, "inotify[%c] %s/tpg%hu/param/TargetAlias",
+		  inotify_event_str(event), tgt->name, tpg->tag);
 }
 
 void configfs_inotify_events_handle(void)
@@ -601,8 +678,10 @@ void configfs_inotify_events_handle(void)
 		else if (streq(event->name, "enable") ||
 			 get_portal(event->name, &af, ip_addr, &port) == 0)
 			configfs_tpg_subtree_handle(event);
+		else if (streq(event->name, "TargetAlias"))
+			configfs_param_alias_handle(event);
 		else
-			log_print(LOG_DEBUG, "inotify[%c] %s unsupported",
+			log_print(LOG_DEBUG, "inotify[%c] %s ignored",
 				  inotify_event_str(event), event->name);
 
 		p += sizeof(struct inotify_event) + event->len;
