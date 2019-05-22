@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.6.6] - 2019-05-22
+### Fixed
+- Register the iSCSI alias attribute (issue #48).
+- Fix registration error with the Microsoft iSNS server when a portal
+  is removed (issue #44). Contributed by Hao Wu.
+
 ## [0.6.5] - 2018-06-20
 ### Fixed
 - Fix registration of new targets after all existing targets are
