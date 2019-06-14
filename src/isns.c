@@ -567,7 +567,7 @@ static int isns_target_register(const struct target *target)
 		length += isns_tlv_set_string(&tlv, ISNS_ATTR_ISCSI_NAME,
 					      tgt->name);
 		length += isns_tlv_set_string(&tlv, ISNS_ATTR_ISCSI_ALIAS,
-					      target_get_alias(target));
+					      target_get_alias(tgt));
 		length += isns_tlv_set(&tlv, ISNS_ATTR_ISCSI_NODE_TYPE,
 				       sizeof(node), &node);
 		isns_target_register_flush(&tlv, &buf[0], sizeof(buf),
