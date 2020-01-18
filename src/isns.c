@@ -1189,7 +1189,7 @@ int isns_init(const char *addr, uint16_t isns_port)
 		return -1;
 	}
 
-	log_print(LOG_INFO, "iSNS server is %s:%hu", addr, isns_port);
+	log_print(LOG_INFO, "iSNS server address: %s, port: %hu", addr, isns_port);
 
 	snprintf(port, sizeof(port), "%hu", isns_port);
 	memset(&hints, 0, sizeof(hints));
