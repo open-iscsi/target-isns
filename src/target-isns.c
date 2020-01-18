@@ -31,8 +31,6 @@ enum {
 	EPOLL_INOTIFY = 0,		/* config FS notifications */
 	EPOLL_SIGNAL,			/* signal handling */
 	EPOLL_ISNS,			/* iSNS (de)register commands */
-	EPOLL_SCN_LISTEN,		/* SCN connection */
-	EPOLL_SCN,			/* SCN notifications */
 	EPOLL_REGISTRATION_TIMER,	/* iSNS registration timer */
 	EPOLL_MAX_FD
 } epoll_id;
@@ -80,11 +78,9 @@ static void epoll_set_fd(int epoll_id, int fd)
 	epoll_set[epoll_id] = fd;
 }
 
-void isns_set_fd(int isns, int scn_listen, int scn)
+void isns_set_fd(int isns)
 {
 	epoll_set_fd(EPOLL_ISNS, isns);
-	epoll_set_fd(EPOLL_SCN_LISTEN, scn_listen);
-	epoll_set_fd(EPOLL_SCN, scn);
 }
 
 static int signal_init(void)
@@ -237,10 +233,6 @@ int main(int argc, char *argv[])
 				isns_registration_refresh();
 			else if (fd == epoll_set[EPOLL_ISNS])
 				isns_handle();
-			else if (fd == epoll_set[EPOLL_SCN_LISTEN])
-				isns_scn_handle(true);
-			else if (fd == epoll_set[EPOLL_SCN])
-				isns_scn_handle(false);
 		}
 	}
 

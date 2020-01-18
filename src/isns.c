@@ -32,7 +32,7 @@
 #include "itimer.h"
 #include "log.h"
 
-extern void isns_set_fd(int isns, int scn_listen, int scn);
+extern void isns_set_fd(int isns);
 extern struct list_head targets;
 extern struct list_head portals;
 
@@ -62,12 +62,9 @@ struct isns_portals_cache {
 };
 
 static LIST_HEAD(query_list);
-static uint16_t scn_listen_port;
 int isns_fd = -1;
-static int scn_listen_fd = -1;
-static int scn_fd = -1;
 static int registration_timer_fd = -1;
-static struct isns_io isns_rx, scn_rx;
+static struct isns_io isns_rx;
 static char *rxbuf;
 static uint16_t transaction;
 static uint32_t registration_period = DEFAULT_REGISTRATION_PERIOD;
@@ -207,7 +204,7 @@ static int isns_connect(void)
 	}
 
 	isns_fd = fd;
-	isns_set_fd(fd, scn_listen_fd, scn_fd);
+	isns_set_fd(fd);
 
 	return fd;
 }
@@ -251,96 +248,6 @@ static int isns_tlv_set_string(struct isns_tlv **tlv, uint32_t tag, const char *
 	return isns_tlv_set(tlv, tag, strlen(str) + 1, str);
 }
 
-/*
- * FIXME: State Change Notification is currently disabled.
- */
-#define SCN_ENABLED 0
-#if SCN_ENABLED
-static int isns_scn_deregister(char *name)
-{
-	int err;
-	uint16_t flags, length = 0;
-	char buf[2048];
-	struct isns_hdr *hdr = (struct isns_hdr *) buf;
-	struct isns_tlv *tlv;
-
-	if (isns_fd == -1 && isns_connect() < 0)
-		return 0;
-
-	memset(buf, 0, sizeof(buf));
-	tlv = (struct isns_tlv *) hdr->pdu;
-
-	length += isns_tlv_set_string(&tlv, ISNS_ATTR_ISCSI_NAME, name);
-	length += isns_tlv_set_string(&tlv, ISNS_ATTR_ISCSI_NAME, name);
-
-	flags = ISNS_FLAG_CLIENT | ISNS_FLAG_LAST_PDU | ISNS_FLAG_FIRST_PDU;
-	isns_hdr_init(hdr, ISNS_FUNC_SCN_DEREG, length, flags,
-		      ++transaction, 0);
-
-	err = write(isns_fd, buf, length + sizeof(struct isns_hdr));
-	if (err < 0)
-		log_print(LOG_ERR, "%s %d: %s", __func__, __LINE__, strerror(errno));
-
-	return 0;
-}
-#endif
-
-#if __BYTE_ORDER == __LITTLE_ENDIAN
-#define set_scn_flag(x)						\
-{								\
-	x = (x & 0x55555555) << 1 | (x & 0xaaaaaaaa) >> 1;	\
-	x = (x & 0x33333333) << 2 | (x & 0xcccccccc) >> 2;	\
-	x = (x & 0x0f0f0f0f) << 4 | (x & 0xf0f0f0f0) >> 4;	\
-	x = (x & 0x00ff00ff) << 8 | (x & 0xff00ff00) >> 8;	\
-	x = (x & 0x0000ffff) << 16 | (x & 0xffff0000) >> 16;	\
-}
-#else
-#define set_scn_flag(x)
-#endif
-
-static int isns_scn_register(void)
-{
-	int err;
-	uint16_t flags, length = 0;
-	uint32_t scn_flags;
-	char buf[4096];
-	struct isns_hdr *hdr = (struct isns_hdr *) buf;
-	struct isns_tlv *tlv;
-	struct target *target;
-
-	if (list_empty(&targets))
-		return 0;
-
-	if (isns_fd == -1 && isns_connect() < 0)
-		return 0;
-
-	memset(buf, 0, sizeof(buf));
-	tlv = (struct isns_tlv *) hdr->pdu;
-
-	target = list_top(&targets, struct target, node);
-
-	length += isns_tlv_set_string(&tlv, ISNS_ATTR_ISCSI_NAME, target->name);
-	length += isns_tlv_set_string(&tlv, ISNS_ATTR_ISCSI_NAME, target->name);
-	length += isns_tlv_set(&tlv, 0, 0, 0);
-
-	scn_flags = ISNS_SCN_FLAG_INITIATOR | ISNS_SCN_FLAG_OBJECT_REMOVE |
-		ISNS_SCN_FLAG_OBJECT_ADDED | ISNS_SCN_FLAG_OBJECT_UPDATED;
-	set_scn_flag(scn_flags);
-	scn_flags = htonl(scn_flags);
-
-	length += isns_tlv_set(&tlv, ISNS_ATTR_ISCSI_SCN_BITMAP,
-			       sizeof(scn_flags), &scn_flags);
-
-	flags = ISNS_FLAG_CLIENT | ISNS_FLAG_LAST_PDU | ISNS_FLAG_FIRST_PDU;
-	isns_hdr_init(hdr, ISNS_FUNC_SCN_REG, length, flags, ++transaction, 0);
-
-	err = write(isns_fd, buf, length + sizeof(struct isns_hdr));
-	if (err < 0)
-		log_print(LOG_ERR, "%s %d: %s", __func__, __LINE__, strerror(errno));
-
-	return 0;
-}
-
 static int isns_eid_attr_query(void)
 {
 	int err;
@@ -368,48 +275,6 @@ static int isns_eid_attr_query(void)
 	length += isns_tlv_set_string(&tlv, ISNS_ATTR_ENTITY_IDENTIFIER, eid);
 	length += isns_tlv_set(&tlv, 0, 0, 0);
 	length += isns_tlv_set(&tlv, ISNS_ATTR_REGISTRATION_PERIOD, 0, 0);
-
-	flags = ISNS_FLAG_CLIENT | ISNS_FLAG_LAST_PDU | ISNS_FLAG_FIRST_PDU;
-	isns_hdr_init(hdr, ISNS_FUNC_DEV_ATTR_QRY, length, flags,
-		      transaction, 0);
-
-	err = write(isns_fd, buf, length + sizeof(struct isns_hdr));
-	if (err < 0)
-		log_print(LOG_ERR, "%s %d: %s", __func__, __LINE__, strerror(errno));
-
-	return 0;
-}
-
-static int isns_attr_query(char *name)
-{
-	int err;
-	uint16_t flags, length = 0;
-	char buf[4096];
-	struct isns_hdr *hdr = (struct isns_hdr *) buf;
-	struct isns_tlv *tlv;
-	uint32_t node = htonl(ISNS_NODE_INITIATOR);
-	struct isns_query *query;
-
-	if (list_empty(&targets))
-		return 0;
-
-	if (isns_fd == -1 && isns_connect() < 0)
-		return 0;
-
-	memset(buf, 0, sizeof(buf));
-	tlv = (struct isns_tlv *) hdr->pdu;
-
-	query = isns_query_init(name, ++transaction);
-	if (!query)
-		return 0;
-
-	length += isns_tlv_set_string(&tlv, ISNS_ATTR_ISCSI_NAME, name);
-	length += isns_tlv_set(&tlv, ISNS_ATTR_ISCSI_NODE_TYPE,
-			       sizeof(node), &node);
-	length += isns_tlv_set(&tlv, 0, 0, 0);
-	length += isns_tlv_set(&tlv, ISNS_ATTR_ISCSI_NAME, 0, 0);
-	length += isns_tlv_set(&tlv, ISNS_ATTR_ISCSI_NODE_TYPE, 0, 0);
-	length += isns_tlv_set(&tlv, ISNS_ATTR_PORTAL_IP_ADDRESS, 0, 0);
 
 	flags = ISNS_FLAG_CLIENT | ISNS_FLAG_LAST_PDU | ISNS_FLAG_FIRST_PDU;
 	isns_hdr_init(hdr, ISNS_FUNC_DEV_ATTR_QRY, length, flags,
@@ -619,9 +484,6 @@ static int isns_target_register(const struct target *target)
 	if (err < 0)
 		log_print(LOG_ERR, "%s %d: %s", __func__, __LINE__, strerror(errno));
 
-	if (scn_listen_port)
-		isns_scn_register();
-
 	return 0;
 }
 
@@ -661,10 +523,6 @@ int isns_target_deregister(const struct target *target)
 	log_print(LOG_DEBUG, "deregistering target %s %s",
 		  all_targets ? "(all)" : target->name,
 		  last ? "(last)" : "");
-
-#if SCN_ENABLED
-	isns_scn_deregister(target->name);
-#endif
 
 	memset(buf, 0, sizeof(buf));
 	tlv = (struct isns_tlv *) hdr->pdu;
@@ -778,55 +636,6 @@ static int recv_pdu(int fd, struct isns_io *rx, struct isns_hdr *hdr)
 	log_print(LOG_ERR, "%s %d: unknown function %x %u %x %u %u",	\
 		  __func__, __LINE__,				\
 		  function, length, flags, transaction, sequence);	\
-}
-
-static char *print_scn_pdu(const struct isns_hdr *hdr)
-{
-	struct isns_tlv *tlv = (struct isns_tlv *) hdr->pdu;
-	uint16_t length = ntohs(hdr->length);
-	char *name = NULL;
-
-	while (length) {
-		uint32_t vlen = ntohl(tlv->length);
-
-		if (vlen + sizeof(*tlv) > length)
-			vlen = length - sizeof(*tlv);
-
-		switch (ntohl(tlv->tag)) {
-		case ISNS_ATTR_ISCSI_NAME:
-			if (vlen) {
-				size_t slen = vlen - 1;
-
-				if (slen >= ISCSI_NAME_SIZE)
-					slen = ISCSI_NAME_SIZE - 1;
-
-				*((char *) tlv->value + slen) = 0;
-
-				log_print(LOG_ERR, "scn name: %u, %s", vlen,
-					  (char *) tlv->value);
-
-				if (!name)
-					name = (char *) tlv->value;
-			}
-			break;
-		case ISNS_ATTR_TIMESTAMP:
-/*			if (vlen == 8)
-				log_print(LOG_ERR, "%u : %u : %" PRIx64, ntohl(tlv->tag),
-					  vlen, *((uint64_t *) tlv->value));
-*/
-			break;
-		case ISNS_ATTR_ISCSI_SCN_BITMAP:
-			if (vlen == 4)
-				log_print(LOG_ERR, "scn bitmap : %x",
-					  *((uint32_t *) tlv->value));
-			break;
-		}
-
-		length -= (sizeof(*tlv) + vlen);
-		tlv = (struct isns_tlv *) ((char *) tlv->value + vlen);
-	}
-
-	return name;
 }
 
 static void isns_registration_set_period(uint32_t period);
@@ -970,7 +779,7 @@ int isns_handle(void)
 		if (err == -EAGAIN)
 			return err;
 		log_print(LOG_DEBUG, "iSNS connection closed (fd = %d)", isns_fd);
-		isns_set_fd(-1, scn_listen_fd, scn_fd);
+		isns_set_fd(-1);
 		isns_fd = -1;
 		return err;
 	}
@@ -981,158 +790,6 @@ int isns_handle(void)
 
 	return 0;
 }
-
-static int scn_accept_connection(void)
-{
-	struct sockaddr_storage from;
-	socklen_t slen;
-	int fd, err, opt = 1;
-
-	slen = sizeof(from);
-	fd = accept(scn_listen_fd, (struct sockaddr *) &from, &slen);
-	if (fd < 0) {
-		log_print(LOG_ERR, "%s %d: accept error %s", __func__, __LINE__,
-			  strerror(errno));
-		return -errno;
-	}
-	log_print(LOG_ERR, "Accept scn connection %d", fd);
-
-	err = setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &opt, sizeof(opt));
-	if (err)
-		log_print(LOG_ERR, "%s %d: %s\n", __func__, __LINE__,
-			  strerror(errno));
-	/* not critical, so ignore. */
-
-	scn_fd = fd;
-	isns_set_fd(isns_fd, scn_listen_fd, scn_fd);
-
-	return 0;
-}
-
-static void send_scn_rsp(char *name, uint16_t transaction)
-{
-	char buf[1024];
-	struct isns_hdr *hdr = (struct isns_hdr *) buf;
-	struct isns_tlv *tlv;
-	uint16_t flags, length = 0;
-	int err;
-
-	memset(buf, 0, sizeof(buf));
-	*((uint32_t *) hdr->pdu) = 0;
-	tlv = (struct isns_tlv *) ((char *) hdr->pdu + 4);
-	length +=4;
-
-	length += isns_tlv_set_string(&tlv, ISNS_ATTR_ISCSI_NAME, name);
-
-	flags = ISNS_FLAG_CLIENT | ISNS_FLAG_LAST_PDU | ISNS_FLAG_FIRST_PDU;
-	isns_hdr_init(hdr, ISNS_FUNC_SCN_RSP, length, flags, transaction, 0);
-
-	err = write(scn_fd, buf, length + sizeof(struct isns_hdr));
-	if (err < 0)
-		log_print(LOG_ERR, "%s %d: %s", __func__, __LINE__, strerror(errno));
-}
-
-int isns_scn_handle(bool is_accept)
-{
-	int err;
-	struct isns_io *rx = &scn_rx;
-	struct isns_hdr *hdr = (struct isns_hdr *) rx->buf;
-	uint16_t function, transaction;
-	char *name = NULL;
-
-	log_print(LOG_ERR, "%s %d: %d", __func__, __LINE__, is_accept);
-
-	if (is_accept)
-		return scn_accept_connection();
-
-	err = recv_pdu(scn_fd, rx, hdr);
-	if (err) {
-		if (err == -EAGAIN)
-			return err;
-		log_print(LOG_DEBUG, "%s %d: close connection %d", __func__, __LINE__,
-			  scn_fd);
-		isns_set_fd(isns_fd, scn_listen_fd, -1);
-		scn_fd = -1;
-		return err;
-	}
-
-	function = ntohs(hdr->function);
-	transaction = ntohs(hdr->transaction);
-
-	switch (function) {
-	case ISNS_FUNC_SCN:
-		name = print_scn_pdu(hdr);
-		break;
-	default:
-		print_unknown_pdu(hdr);
-	}
-
-	if (name) {
-		send_scn_rsp(name, transaction);
-		isns_attr_query(name);
-	}
-
-	return 0;
-}
-
-#if SCN_ENABLED
-static int scn_init(char *addr __attribute__ ((unused)))
-{
-	int fd, opt, err;
-	union {
-		struct sockaddr s;
-		struct sockaddr_storage ss;
-		struct sockaddr_in s4;
-		struct sockaddr_in6 s6;
-	} l;
-	socklen_t slen;
-
-	fd = socket(ss.ss_family, SOCK_STREAM, IPPROTO_TCP);
-	if (fd < 0) {
-		log_print(LOG_ERR, "%s %d: %s\n", __func__, __LINE__, strerror(errno));
-		return -errno;
-	}
-
-	opt = 1;
-	if (ss.ss_family == AF_INET6) {
-		err = setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, &opt, sizeof(opt));
-		if (err)
-			log_print(LOG_ERR, "%s %d: %s\n", __func__, __LINE__,
-				  strerror(errno));
-		goto out;
-	}
-
-	err = listen(fd, 5);
-	if (err) {
-		log_print(LOG_ERR, "%s %d: %s\n", __func__, __LINE__, strerror(errno));
-		goto out;
-	}
-
-	slen = sizeof(l.s);
-	err = getsockname(fd, &l.s, &slen);
-	if (err) {
-		log_print(LOG_ERR, "%s %d: %s\n", __func__, __LINE__, strerror(errno));
-		goto out;
-	}
-
-	/* protocol independent way ? */
-	if (l.ss.ss_family == AF_INET6)
-		scn_listen_port = ntohs((&l.s6)->sin6_port);
-	else
-		scn_listen_port = ntohs((&l.s4)->sin_port);
-
-	log_print(LOG_DEBUG, "SCN listen port is %hu", scn_listen_port);
-out:
-	if (err)
-		close(fd);
-	else {
-		scn_listen_fd = fd;
-		isns_set_fd(isns_fd, scn_listen_fd, scn_fd);
-	}
-
-	return err;
-}
-#endif
 
 int isns_registration_timer_init(void)
 {
@@ -1208,14 +865,8 @@ int isns_init(const char *addr, uint16_t isns_port)
 		return -1;
 	}
 
-#if SCN_ENABLED
-	scn_init(addr);
-#endif
-
 	isns_rx.buf = rxbuf;
 	isns_rx.offset = 0;
-	scn_rx.buf = rxbuf + BUFSIZE;
-	scn_rx.offset = 0;
 
 	return 0;
 }
@@ -1233,7 +884,7 @@ void isns_stop(void)
 void isns_exit(void)
 {
 	/* We can't receive events any more. */
-	isns_set_fd(-1, -1, -1);
+	isns_set_fd(-1);
 
 	free(rxbuf);
 }
