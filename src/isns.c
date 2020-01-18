@@ -183,15 +183,15 @@ static int isns_connect(void)
 
 	fd = socket(ss.ss_family, SOCK_STREAM, IPPROTO_TCP);
 	if (fd < 0) {
-		log_print(LOG_ERR, "unable to create (%s) %d!", strerror(errno),
-			  ss.ss_family);
+		log_print(LOG_ERR, "unable to create socket: %s, protocol family: %d",
+                          strerror(errno), ss.ss_family);
 		return -1;
 	}
 
 	err = connect(fd, (struct sockaddr *) &ss, sizeof(ss));
 	if (err < 0) {
-		log_print(LOG_ERR, "unable to connect (%s) %d!", strerror(errno),
-			  ss.ss_family);
+		log_print(LOG_ERR, "unable to connect: %s, protocol family: %d",
+                          strerror(errno), ss.ss_family);
 		close(fd);
 		return -1;
 	}
