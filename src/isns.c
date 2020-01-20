@@ -858,7 +858,7 @@ int isns_init(const char *addr, uint16_t isns_port)
 		log_print(LOG_ERR, "getaddrinfo error %s, %s", gai_strerror(err), addr);
 		return -1;
 	}
-	memcpy(&ss, res->ai_addr, sizeof(*res->ai_addr));
+	memcpy(&ss, res->ai_addr, res->ai_addrlen);
 	freeaddrinfo(res);
 
 	rxbuf = calloc(2, BUFSIZE);
