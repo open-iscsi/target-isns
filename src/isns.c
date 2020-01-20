@@ -850,7 +850,9 @@ int isns_init(const char *addr, uint16_t isns_port)
 
 	snprintf(port, sizeof(port), "%hu", isns_port);
 	memset(&hints, 0, sizeof(hints));
+	hints.ai_family = AF_UNSPEC;
 	hints.ai_socktype = SOCK_STREAM;
+	hints.ai_flags = AI_NUMERICSERV;
 	err = getaddrinfo(addr, (char *) &port, &hints, &res);
 	if (err) {
 		log_print(LOG_ERR, "getaddrinfo error %s, %s", gai_strerror(err), addr);
