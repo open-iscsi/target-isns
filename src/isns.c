@@ -81,7 +81,7 @@ static int isns_get_ip(int fd)
 		struct sockaddr_in s4;
 		struct sockaddr_in6 s6;
 	} l;
-	socklen_t slen = sizeof(l.s);
+	socklen_t slen = sizeof(l.ss);
 
 	err = getsockname(fd, &l.s, &slen);
 	if (err) {
@@ -89,14 +89,14 @@ static int isns_get_ip(int fd)
 		return err;
 	}
 
-	err = getnameinfo(&l.s, sizeof(l.s),
+	err = getnameinfo(&l.s, slen,
 			  eid, sizeof(eid), NULL, 0, 0);
 	if (err) {
 		log_print(LOG_ERR, "getnameinfo error %s!", gai_strerror(err));
 		return err;
 	}
 	if (streq(eid, "localhost.localdomain"))
-		getnameinfo(&l.s, sizeof(l.s),
+		getnameinfo(&l.s, slen,
 			    eid, sizeof(eid), NULL, 0, NI_NUMERICHOST);
 
 	switch (l.ss.ss_family) {
