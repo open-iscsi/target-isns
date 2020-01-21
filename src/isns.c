@@ -8,8 +8,7 @@
  * SPDX-License-Identifier:	GPL-2.0+
  */
 
-#define _POSIX_SOURCE
-#define _POSIX_C_SOURCE 200112L
+#define _GNU_SOURCE
 #include <errno.h>
 #include <inttypes.h>
 #include <limits.h>
@@ -68,7 +67,7 @@ static struct isns_io isns_rx;
 static char *rxbuf;
 static uint16_t transaction;
 static uint32_t registration_period = DEFAULT_REGISTRATION_PERIOD;
-static char eid[HOST_NAME_MAX];
+static char eid[NI_MAXHOST];
 static uint8_t ip[16];
 static struct sockaddr_storage ss;
 
