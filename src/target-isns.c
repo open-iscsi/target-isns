@@ -42,8 +42,8 @@ static struct epoll_event epoll_events[EPOLL_MAX_FD];
 static void print_usage(void)
 {
 	printf("Usage: " PROGNAME " [OPTIONS]\n"
-	       "  -i, --isns-server          Set the IP address of the iSNS server.\n"
-	       "  -p, --isns-port            Set the remote port for iSNS server.\n"
+	       "  -i, --isns-server          Set the hostname or IP address of the iSNS server.\n"
+	       "  -p, --isns-port            Set the port number of the iSNS server.\n"
 	       "  -d, --debug                Increase the debugging level (implies -f).\n"
 	       "  -f, --foreground           Run in the foreground.\n"
 	       "  -s, --configfs-iscsi-path  Use alternate sys configfs iscsi path.\n"
