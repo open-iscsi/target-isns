@@ -8,8 +8,7 @@
  * SPDX-License-Identifier:	GPL-2.0+
  */
 
-#define _POSIX_SOURCE
-#define _POSIX_C_SOURCE 200112L
+#define _GNU_SOURCE
 #include <errno.h>
 #include <inttypes.h>
 #include <limits.h>
@@ -68,7 +67,7 @@ static struct isns_io isns_rx;
 static char *rxbuf;
 static uint16_t transaction;
 static uint32_t registration_period = DEFAULT_REGISTRATION_PERIOD;
-static char eid[HOST_NAME_MAX];
+static char eid[NI_MAXHOST];
 static uint8_t ip[16];
 static struct sockaddr_storage ss;
 
@@ -82,7 +81,7 @@ static int isns_get_ip(int fd)
 		struct sockaddr_in s4;
 		struct sockaddr_in6 s6;
 	} l;
-	socklen_t slen = sizeof(l.s);
+	socklen_t slen = sizeof(l.ss);
 
 	err = getsockname(fd, &l.s, &slen);
 	if (err) {
@@ -90,14 +89,14 @@ static int isns_get_ip(int fd)
 		return err;
 	}
 
-	err = getnameinfo(&l.s, sizeof(l.s),
+	err = getnameinfo(&l.s, slen,
 			  eid, sizeof(eid), NULL, 0, 0);
 	if (err) {
 		log_print(LOG_ERR, "getnameinfo error %s!", gai_strerror(err));
 		return err;
 	}
 	if (streq(eid, "localhost.localdomain"))
-		getnameinfo(&l.s, sizeof(l.s),
+		getnameinfo(&l.s, slen,
 			    eid, sizeof(eid), NULL, 0, NI_NUMERICHOST);
 
 	switch (l.ss.ss_family) {
@@ -850,13 +849,15 @@ int isns_init(const char *addr, uint16_t isns_port)
 
 	snprintf(port, sizeof(port), "%hu", isns_port);
 	memset(&hints, 0, sizeof(hints));
+	hints.ai_family = AF_UNSPEC;
 	hints.ai_socktype = SOCK_STREAM;
+	hints.ai_flags = AI_NUMERICSERV;
 	err = getaddrinfo(addr, (char *) &port, &hints, &res);
 	if (err) {
 		log_print(LOG_ERR, "getaddrinfo error %s, %s", gai_strerror(err), addr);
 		return -1;
 	}
-	memcpy(&ss, res->ai_addr, sizeof(*res->ai_addr));
+	memcpy(&ss, res->ai_addr, res->ai_addrlen);
 	freeaddrinfo(res);
 
 	rxbuf = calloc(2, BUFSIZE);
