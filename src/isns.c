@@ -53,7 +53,6 @@ struct isns_query {
 };
 
 struct isns_portals_cache {
-	size_t nr_portals;
 	struct {
 		uint8_t ip_addr[16];
 		uint32_t port;
