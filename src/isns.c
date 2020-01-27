@@ -124,6 +124,7 @@ static char *isns_source_attribute_get(void)
 	} else if (source_attribute[0] == '\0' ||
 		   !target_find(source_attribute)) {
 		target = list_top(&targets, struct target, node);
+		assert(target);
 		strncpy(source_attribute, target->name, ISCSI_NAME_SIZE);
 		source_attribute[ISCSI_NAME_SIZE - 1] = '\0';
 		log_print(LOG_DEBUG, "source attribute set to %s",
@@ -384,6 +385,7 @@ static int isns_target_register(const struct target *target)
 		if (list_empty(&targets))
 			return 0;
 		target = list_top(&targets, struct target, node);
+		assert(target);
 	}
 
 	if (isns_fd == -1 && isns_connect() < 0)
