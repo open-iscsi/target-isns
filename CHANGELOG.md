@@ -6,6 +6,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.6.7] - 2020-01-31
+### Fixed
+- Register the correct alias when multiple iSCSI targets exist.
+  Contributed by MostlyBrian.
+- Fix multiple bugs with IPv6 (issue #51). Reported by Yuya Murai.
+
 ## [0.6.6] - 2019-05-22
 ### Fixed
 - Register the iSCSI alias attribute (issue #48).
