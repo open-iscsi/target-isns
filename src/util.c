@@ -43,7 +43,9 @@ int conffile_read(void)
 	memset(&config, 0, sizeof(config));
 	config.log_level = LOG_INFO;
 	config.isns_port = ISNS_PORT;
-	strcpy(config.configfs_iscsi_path, CONFIGFS_ISCSI_PATH);
+	const size_t sz = sizeof(config.configfs_iscsi_path);
+	strncpy(config.configfs_iscsi_path, CONFIGFS_ISCSI_PATH, sz);
+	config.configfs_iscsi_path[sz - 1] = '\0';
 
 	if ((file = fopen(CONFFILE, "r")) == NULL) {
 		log_print(LOG_ERR, "Could not read " CONFFILE);

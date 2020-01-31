@@ -347,7 +347,7 @@ static int configfs_tpg_update(struct target *tgt, struct tpg *tpg)
 			assert(portal);
 		}
 
-		struct portal_ref *portal_ref = configfs_portal_ref_find(tpg, portal);
+		portal_ref = configfs_portal_ref_find(tpg, portal);
 		if (!portal_ref) {
 			portal_ref = configfs_portal_ref_init(tpg, portal);
 			assert(portal_ref);
