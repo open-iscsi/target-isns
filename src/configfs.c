@@ -60,6 +60,8 @@ LIST_HEAD(portals);
 static int inotify_fd = -1;
 static const char LIO_TARGET_ALIAS[] = "LIO Target";
 
+struct config config;
+
 bool configfs_iscsi_path_exists(void)
 {
 	DIR *dir = opendir(config.configfs_iscsi_path);
