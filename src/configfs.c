@@ -148,7 +148,6 @@ static struct target *configfs_target_init(const char *name)
 static bool configfs_tpg_enabled(const struct target *tgt, uint16_t tpg_tag)
 {
 	int fd;
-	ssize_t nr;
 	char buf[8];
 	char *path;
 	bool enabled = false;
@@ -161,7 +160,7 @@ static bool configfs_tpg_enabled(const struct target *tgt, uint16_t tpg_tag)
 		return false;
 	}
 	free(path);
-	if ((nr = read(fd, buf, sizeof(buf))) != -1) {
+	if (read(fd, buf, sizeof(buf)) != -1) {
 		enabled = buf[0] == '1';
 	}
 	close(fd);
