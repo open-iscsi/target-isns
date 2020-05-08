@@ -6,6 +6,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 
 ## [Unreleased]
 
+## [0.6.8] - 2020-05-08
+### Fixed
+- Fix compilation error with GCC 10. Contributed by Maurizio Lombardi.
+
 ## [0.6.7] - 2020-01-31
 ### Fixed
 - Register the correct alias when multiple iSCSI targets exist.
