@@ -6,13 +6,10 @@
 #
 
 project(target-isns "C")
-set(TARGET_ISNS_VERSION "0.6.4")
+set(TARGET_ISNS_VERSION "0.6.8")
 
-cmake_minimum_required(VERSION 2.8)
+cmake_minimum_required(VERSION 3.1)
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -Werror")
-if(CMAKE_VERSION VERSION_LESS "3.1")
-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=c99")
-endif()
 
 option(SUPPORT_SYSTEMD "Support service control via systemd" OFF)
 

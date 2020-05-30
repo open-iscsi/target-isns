@@ -12,9 +12,10 @@
 
 #include <inttypes.h>
 
-#define ISCSI_NAME_SIZE	224
-#define ISNS_PORT	3205
-#define ISNS_ALIGN	4
+#define ISCSI_NAME_SIZE	  224
+#define ISCSI_ALIAS_SIZE  256
+#define ISNS_PORT         3205
+#define ISNS_ALIGN        4
 
 struct isns_hdr {
 	uint16_t version;

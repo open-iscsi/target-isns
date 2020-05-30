@@ -17,8 +17,6 @@ struct isns_query *isns_query_init(const char *name, uint16_t transaction);
 
 int isns_handle(void);
 
-int isns_scn_handle(bool is_accept);
-
 int isns_init(const char *addr, uint16_t isns_port);
 
 void isns_start(void);

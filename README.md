@@ -48,9 +48,14 @@ Configuration
 -------------
 
 Edit the configuration file located at `/etc/target-isns.conf` and
-adjust the `isns_server` variable to the IP address of your iSNS server:
+adjust the `isns_server` variable to the hostname or IP address of
+your iSNS server:
 
-    isns_server = 192.168.0.1
+    isns_server = 192.0.2.1
+
+IPv6 addresses are supported too:
+
+    isns_server = 2001:db8::1
 
 The iSNS server address can also be passed on the command line with
 the `--isns-server` option.
