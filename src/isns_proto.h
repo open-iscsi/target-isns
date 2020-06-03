@@ -24,13 +24,13 @@ struct isns_hdr {
 	uint16_t flags;
 	uint16_t transaction;
 	uint16_t sequence;
-	uint32_t pdu[0];
+	uint32_t pdu[];
 } __attribute__ ((packed));
 
 struct isns_tlv {
 	uint32_t tag;
 	uint32_t length;
-	uint32_t value[0];
+	uint32_t value[];
 } __attribute__ ((packed));
 
 /* X-macro describing iSNSP commands and responses (4.1.3) */
