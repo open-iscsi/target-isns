@@ -238,7 +238,7 @@ static struct tpg *configfs_tpg_init(struct target *tgt, uint16_t tpg_tag)
 	return tpg;
 }
 
-static int get_portal(const char *str, int *af, char *ip_addr, uint16_t *port)
+static int get_portal(char *str, int *af, char *ip_addr, uint16_t *port)
 {
 	uint8_t addr[sizeof(struct in6_addr)];
 	char *p = strrchr(str, ':');
